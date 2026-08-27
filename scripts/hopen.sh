@@ -72,6 +72,36 @@ _label_for() {
   fi
 }
 
+# 给 label 加唯一后缀，避免跟 herdr 里现存的其他同名 ws / tab 撞名。
+# 撞上就依次试 label+a / label+b / ... / label+z；都不够用则带时间戳。
+# kind = "workspace" 或 "tab"；影响拉哪个列表做去重检查。
+_uniquify_label() {
+  local label="$1"
+  local kind="$2"
+  local existing new
+  if [ "$kind" = "tab" ]; then
+    existing=$(herdr tab list 2>/dev/null \
+      | jq -r '.result.tabs[].label' 2>/dev/null) || existing=""
+  else
+    existing=$(herdr workspace list 2>/dev/null \
+      | jq -r '.result.workspaces[].label' 2>/dev/null) || existing=""
+  fi
+  # 本身不撞 → 原样返回
+  if ! printf '%s\n' "$existing" | grep -qxF "$label"; then
+    printf '%s' "$label"; return
+  fi
+  # 依次试 +a / +b / ...
+  local s
+  for s in a b c d e f g h i j k l m n o p q r s t u v w x y z; do
+    new="${label}+${s}"
+    if ! printf '%s\n' "$existing" | grep -qxF "$new"; then
+      printf '%s' "$new"; return
+    fi
+  done
+  # 都满了（26 个）走 timestamp；不要年月日，仅取秒为避免太长
+  printf '%s+%s' "$label" "$(date +%s)"
+}
+
 # 创建新 ws 并按 layout 代号完成所有 split。结果写全局 HOPEN_WS_ID 和
 # HOPEN_CREATED_PANES（按创建顺序，root 在 idx=0）。任何一步 split 失败会
 # 回滚已开 pane + 关 ws，函数返回非 0。
@@ -79,12 +109,21 @@ _label_for() {
 # 这是 hopen() 和 hopen-once.sh 共用的底层原语——避免重复实现 ws+split 流程。
 _h_build_layout() {
   local code="$1"
-  local label="${2:-}"
+  local ws_label="${2:-}"
   local cwd="${3:-$PWD}"   # 新 ws 的根 pane cwd；split 会继承，无需逐个传
+  local tab_label="${4:-}" # tab 标题；空 = 跟随 ws_label
+  local pane_names="${5:-}" # 换行分隔的 pane 标签列表，按 created[] 顺序；空行 = 该 pane 保持默认名
 
-  # 默认 label：从 cwd 推导（git repo → 分支名，否则 → basename）。
+  # 默认 ws_label：从 cwd 推导（git repo → 分支名，否则 → basename）。
   # 调用方传了 $2 时（hopen() 默认参数的场景）保留调用方的值。
-  [ -z "$label" ] && label=$(_label_for "$cwd")
+  [ -z "$ws_label" ] && ws_label=$(_label_for "$cwd")
+
+  # tab_label 默认跟 ws_label；这样不传 -T 时 ws / tab 名字一致。
+  [ -z "$tab_label" ] && tab_label="$ws_label"
+
+  # 现有 herdr 里可能已有同名 ws / tab。加唯一后缀避免 tab bar 里区分不出。
+  ws_label=$(_uniquify_label "$ws_label" workspace)
+  tab_label=$(_uniquify_label "$tab_label" tab)
 
   local steps
   steps=$(_steps_for "$code") || return 2
@@ -92,14 +131,14 @@ _h_build_layout() {
   local ws_id root_pane tab_id
   # 读 3 个字段：ws_id、root_pane、tab_id（tab 创建后 herdr 自动命名为数字序号，
   # 所以后面还要 rename）
-  read -r ws_id root_pane tab_id < <(_h_ws "$label" "$cwd") || {
+  read -r ws_id root_pane tab_id < <(_h_ws "$ws_label" "$cwd") || {
     echo "hopen: ws 创建失败" >&2
     return 1
   }
 
-  # 把 tab 也 rename 成同一个 label。这样 ws 列表和 tab bar 显示一致，
+  # 把 tab 也 rename 成同 tab_label。这样 ws 列表和 tab bar 显示一致，
   # 多个项目同时开着的时候一眼能分清。
-  herdr tab rename "$tab_id" "$label" >/dev/null 2>&1 || true
+  herdr tab rename "$tab_id" "$tab_label" >/dev/null 2>&1 || true
 
   local created=("$root_pane") parent="$root_pane" pid parent_tok direction line
   while IFS= read -r line; do
@@ -123,6 +162,23 @@ _h_build_layout() {
 
   HOPEN_WS_ID="$ws_id"
   HOPEN_CREATED_PANES=("${created[@]}")
+
+  # 按调用方传入的 pane_names 重命名 pane（按 created[] 顺序）。
+  # 空行 = 该 pane 不改名（保持 herdr 默认名）。
+  # rename 失败不阻断脚本，只把诊断写到 stderr —— pane 留可读默认名不影响布局。
+  if [ -n "$pane_names" ]; then
+    local i=0 name total=${#created[@]}
+    while IFS= read -r name; do
+      [ $i -ge "$total" ] && break
+      if [ -n "$name" ]; then
+        if ! herdr pane rename "${created[$i]}" "$name" >/dev/null 2>&1; then
+          echo "[hopen] pane rename 失败: ${created[$i]} ← '$name'" >&2
+        fi
+      fi
+      i=$((i+1))
+    done <<<"$pane_names"
+  fi
+
   return 0
 }
 
@@ -224,6 +280,34 @@ _prompt_for() {
     || true
 }
 
+# 读 conf：layout.LAYOUT.panes.POS.pane_name
+# 返回：echo 出 pane name 字符串。没配或配为空串都回退到 $pos（位置名本身），
+# 作为默认 pane label。这样 hopen() 总是会填 pane_names，不会留空行。
+_pane_name_for() {
+  local layout="$1" pos="$2"
+  local name=""
+  if [ -f "$HOPEN_CONF" ]; then
+    name=$(sed -n "/^\[layout\.${layout}\.panes\.${pos}\]\$/,/^\[/p" "$HOPEN_CONF" 2>/dev/null \
+      | { grep -m1 '^pane_name[[:space:]]*=' 2>/dev/null || true; } \
+      | sed -E 's/^pane_name[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/' 2>/dev/null) || name=""
+  fi
+  if [ -z "$name" ]; then
+    name="$pos"
+  fi
+  printf '%s' "$name"
+}
+
+# layout 代号 -> 该 layout 的 pane 总数（含 root）。
+# _steps_for 输出 N 行 (N = split 次数)，总 pane 数 = N + 1。直接查表比运行
+# _steps_for 更可靠，也避免 `$(( $(多行) + 1 ))` 被算术上下文当变量查的陷阱。
+_panes_for() {
+  case "$1" in
+    12|21|111) echo 3 ;;
+    13|31|22)  echo 4 ;;
+    *)         echo 0 ;;
+  esac
+}
+
 # Resolve a kind through _KIND_ALIASES. Unknown input passes through.
 _resolve_kind() {
   case "$1" in
@@ -291,7 +375,18 @@ hopen() {
     return 2
   }
 
-  _h_build_layout "$code" || return 1
+  # 按 created[] 顺序构造 pane names：读 conf 的 pane_name，未配则用位置名本身。
+  local pane_names="" total
+  total=$(_panes_for "$code")
+  local i=0 pos name
+  while [ $i -lt "$total" ]; do
+    pos=$(_position_for "$code" "$i")
+    name=$(_pane_name_for "$code" "$pos")
+    pane_names+="${name}"$'\n'
+    i=$((i+1))
+  done
+
+  _h_build_layout "$code" "" "" "" "$pane_names" || return 1
 
   local ws_id="${HOPEN_WS_ID}"
   local -a created=("${HOPEN_CREATED_PANES[@]}")

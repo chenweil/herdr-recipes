@@ -8,12 +8,14 @@
 #   hopen-once.sh --layout CODE --kind|-k K1 --prompt|-p P1 --kind K2 --prompt P2 ...
 #   hopen-once.sh --no-agents|-n                  # build bare layout only
 #   hopen-once.sh --path|-C PATH                  # cwd for the new workspace (default: .)
+#   hopen-once.sh --pane-name|-N "A,B,C"         # comma-separated, equivalent to -N A -N B -N C
 #   hopen-once.sh --help|-h
 #
 # 重复同一 kind N 次：用 `K:N` 语法。`--kind codex:4` 等价于
 # `-k codex -k codex -k codex -k codex`，但只打一次。
 #
-# Short flags: -l layout, -k kind, -p prompt, -n no-agents, -C path, -h help.
+# Short flags: -l layout, -k kind, -p prompt, -N pane-name, -n no-agents, -C path, -h help.
+# (-N 是大写 N，因为 -n 被 --no-agents 占了。)
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
 #   3 kinds → 12 (left big + right column)
@@ -31,6 +33,22 @@
 #     -k codex -p "implement A" \
 #     -k codex -p "implement B" \
 #     -k pi   -p "review"
+#
+# Per-pane labels: --pane-name|-N matches KINDS[] by index (visual order).
+# 缺省 = 位置名（left / left-top / right-bottom / middle 等）。
+#   hopen-once.sh -l 22 \
+#     -k codex -N "codex-A" -p "implement A" \
+#     -k codex -N "codex-B" -p "implement B" \
+#     -k pi   -N "review"   -p "review"
+#   hopen-once.sh -l 22 -k codex:2 -k pi:2 -N codex-A -N codex-B -N pi-A -N pi-B
+#
+# 逗号分隔语法：-N "A,B,C" 等价于 -N A -N B -N C。名里本身含逗号需手动 escape。
+#   hopen-once.sh -l 22 -k codex:4 -N "a,b,c,d"
+#
+# 位置参数溢出语法：KINDS[] 超过 layout pane 数时，溢出部分 prepend 到 NAMES，
+# 跟在 KINDS 后面追加的位置参数当 pane name（按视觉顺序），不用 -N。
+#   hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
+#   hopen-once.sh -l 22 codex codex pi claude A B    # 第 3、4 pane 用位置名兜底
 #
 # Examples:
 #   hopen-once.sh codex codex pi                    # 3 panes (layout 12)
@@ -54,11 +72,26 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # prevents it from running on source.
 source "$SCRIPT_DIR/hopen.sh"
 
+# 按视觉阅读顺序（行优先）输出每个 layout 的位置名。
+# `hopen.sh` 的 pane 创建顺序是列优先（21/31/22 会反序），但用户看到的布局是
+# 行优先的。用这个函数把用户传的 NAMES[] 跟 KINDS[] 反查回 created[] 顺序。
+_h_row_major() {
+  case "$1" in
+    12)  printf 'left\nright-top\nright-bottom\n' ;;
+    21)  printf 'left-top\nleft-bottom\nright\n' ;;
+    13)  printf 'left\nright-top\nright-mid\nright-bottom\n' ;;
+    31)  printf 'left-top\nleft-mid\nleft-bottom\nright\n' ;;
+    22)  printf 'left-top\nright-top\nleft-bottom\nright-bottom\n' ;;
+    111) printf 'left\nmiddle\nright\n' ;;
+  esac
+}
+
 # --- Parse hopen-once.sh flags ---
 LAYOUT=""
 NO_AGENTS=0
 KINDS=()
 PROMPTS=()
+NAMES=()        # pane label 列表，跟 KINDS[] 同索引（视觉顺序）
 PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
 print_help() {
@@ -105,16 +138,43 @@ _expand_kind() {
   esac
 }
 
+# 把 "-N a,b,c" 里的逗号分隔值展开成多条 NAMES。跟 -N 重复 flag 等价：
+#   -N "a,b,c"          = -N a -N b -N c
+#   -N "a, b, c"        = -N "a" -N " b" -N " c"  （trim 头尾空白）
+# 不含逗号就走原样追加，跟 _expand_kind 对称。
+_expand_name() {
+  local raw="$1"
+  case "$raw" in
+    *,*)
+      local part
+      # IFS=',' read -ra 是 bash 标准分割；分隔后逐个 trim 头尾空白。
+      local IFS=','
+      local -a _parts
+      _parts=($raw)
+      for part in "${_parts[@]}"; do
+        # trim leading + trailing whitespace
+        part="${part#"${part%%[![:space:]]*}"}"
+        part="${part%"${part##*[![:space:]]}"}"
+        NAMES+=("$part")
+      done
+      ;;
+    *)
+      NAMES+=("$raw")
+      ;;
+  esac
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-agents|-n) NO_AGENTS=1; shift ;;
     --kind|-k)       _expand_kind "$2" || exit 2; shift 2 ;;
     --prompt|-p)     PROMPTS+=("$2"); shift 2 ;;
+    --pane-name|-N)  _expand_name "$2"; shift 2 ;;
     --layout|-l)     LAYOUT="$2"; shift 2 ;;
     --path|-C)       PATH_ARG="$2"; shift 2 ;;
     --help|-h)       print_help; exit 0 ;;
     --) shift; break ;;
-    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --layout/-l / --path/-C / --help/-h" >&2; exit 2 ;;
+    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --pane-name/-N / --layout/-l / --path/-C / --help/-h" >&2; exit 2 ;;
     *)  _expand_kind "$1" || exit 2; shift ;;
   esac
 done
@@ -142,27 +202,72 @@ if ! _steps_for "$LAYOUT" >/dev/null 2>&1; then
   exit 2
 fi
 
-# Cap kinds to layout pane count. _steps_for 输出 N 行 (N = split 次数),
-# 总 pane 数 = N + 1 (含 root)。直接查表比运行 _steps_for 更可靠，
-# 也避免 `$(( $(多行) + 1 ))` 被算术上下文当作变量查的陷阱。
-_panes_for() {
-  case "$1" in
-    12|21|111) echo 3 ;;
-    13|31|22)  echo 4 ;;
-    *)         echo 0 ;;
-  esac
+# 把超出 max_panes 的 KINDS 溢出部分 prepend 到 NAMES。
+# 顺序语义：位置参数里 KINDS 后面紧跟的值按视觉顺序在 NAMES 前面，-N flag 追加的在后面。
+# 读全局 KINDS[]/NAMES[]；写全局 KINDS[]/NAMES[]。脚本顶层调用，不是函数。
+_cap_kinds_to_panes() {
+  local max_panes="$1"
+  if [ "${#KINDS[@]}" -gt "$max_panes" ]; then
+    local extra=("${KINDS[@]:$max_panes}")
+    echo "hopen-once: kind 数 ${#KINDS[@]} 超过布局 $LAYOUT 的 pane 数 $max_panes" >&2
+    echo "             多余部分当 NAMES: ${extra[*]}" >&2
+    KINDS=("${KINDS[@]:0:$max_panes}")
+    if [ "${#NAMES[@]}" -eq 0 ]; then
+      NAMES=("${extra[@]}")
+    else
+      local old_names=("${NAMES[@]}")
+      NAMES=("${extra[@]}" "${old_names[@]}")
+    fi
+  fi
 }
+
+# Cap kinds to layout pane count. _panes_for 在 hopen.sh 里定义，source 后可用。
 max_panes=$(_panes_for "$LAYOUT")
-if [ "${#KINDS[@]}" -gt "$max_panes" ]; then
-  # Split into two echos to avoid bash 3.2 bug: 全角 ；+ 变量展开 + set -u
-  # 在同一双引号里会误报变量未设。
-  echo "hopen-once: kind 数 ${#KINDS[@]} 超过布局 $LAYOUT 的 pane 数 $max_panes" >&2
-  echo "             多余 kind 被忽略: ${KINDS[*]:$max_panes}" >&2
-  KINDS=("${KINDS[@]:0:$max_panes}")
+_cap_kinds_to_panes "$max_panes"
+
+# Cap names to layout pane count (与 KINDS 相同处理)。
+if [ "${#NAMES[@]}" -gt "$max_panes" ]; then
+  echo "hopen-once: name 数 ${#NAMES[@]} 超过布局 $LAYOUT 的 pane 数 $max_panes" >&2
+  echo "             多余 name 被忽略: ${NAMES[*]:$max_panes}" >&2
+  NAMES=("${NAMES[@]:0:$max_panes}")
 fi
 
 # --- Build layout (shared with hopen.sh via _h_build_layout) ---
-_h_build_layout "$LAYOUT" "" "$RESOLVED_PATH" || { echo "hopen-once: 布局创建失败" >&2; exit 1; }
+#
+# pane_names 按 created[] 顺序构造：NAMES[] 跟 KINDS[] 一样是视觉顺序（行优先），
+# 需要先按 _position_for 反向映射到 created idx，再交给 _h_build_layout 重命名。
+# NAMES[i] 为空的 pane 回退到位置名（_pane_name_for 同样的默认行为），保持跟
+# hopen.sh 一致——两个入口都保证所有 pane 有可读默认名。
+pane_names=""
+created_names=()
+i=0
+while [ $i -lt "$max_panes" ]; do
+  # 初始填位置名（默认）
+  created_names+=("$(_position_for "$LAYOUT" "$i")")
+  i=$((i+1))
+done
+# 遍历视觉位置，用 _position_for 反查 created idx 覆盖 NAMES[] 里的项
+visual_idx=0
+while IFS= read -r pos; do
+  nm="${NAMES[$visual_idx]:-}"
+  if [ -n "$nm" ]; then
+    j=0
+    while [ $j -lt "$max_panes" ]; do
+      if [ "$(_position_for "$LAYOUT" "$j")" = "$pos" ]; then
+        created_names[$j]="$nm"
+        break
+      fi
+      j=$((j+1))
+    done
+  fi
+  visual_idx=$((visual_idx+1))
+done < <(_h_row_major "$LAYOUT")
+# 转成换行分隔的字符串
+for nm in "${created_names[@]}"; do
+  pane_names+="${nm}"$'\n'
+done
+
+_h_build_layout "$LAYOUT" "" "$RESOLVED_PATH" "" "$pane_names" || { echo "hopen-once: 布局创建失败" >&2; exit 1; }
 
 ws_id="${HOPEN_WS_ID}"
 created=( "${HOPEN_CREATED_PANES[@]}" )
@@ -174,17 +279,6 @@ created=( "${HOPEN_CREATED_PANES[@]}" )
 # panes by iterating row-major position names and finding the created pane
 # whose `_position_for` matches. This decouples user-facing order (visual
 # reading) from hopen.sh's internal column-major creation order.
-_h_row_major() {
-  case "$1" in
-    12)  printf 'left\nright-top\nright-bottom\n' ;;
-    21)  printf 'left-top\nleft-bottom\nright\n' ;;
-    13)  printf 'left\nright-top\nright-mid\nright-bottom\n' ;;
-    31)  printf 'left-top\nleft-mid\nleft-bottom\nright\n' ;;
-    22)  printf 'left-top\nright-top\nleft-bottom\nright-bottom\n' ;;
-    111) printf 'left\nmiddle\nright\n' ;;
-  esac
-}
-
 if [ "$NO_AGENTS" -eq 0 ] && [ "${#KINDS[@]}" -gt 0 ]; then
   i=0
   while IFS= read -r pos; do

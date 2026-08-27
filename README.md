@@ -63,11 +63,23 @@ hopen-once.sh -l 22 \
   -k codex -p "implement B" \
   -k pi   -p "review"
 
+# Per-pane labels (-N/--pane-name, visual order, matched by index to kinds)
+hopen-once.sh -l 22 \
+  -k codex -N "codex-A" -p "implement A" \
+  -k codex -N "codex-B" -p "implement B" \
+  -k pi   -N "review"   -p "review"
+
+# Comma-separated shortcut: -N "A,B,C" == -N A -N B -N C
+hopen-once.sh -l 22 -k codex:4 -N "a,b,c,d"
+
+# Positional overflow: KINDS past max_panes go into NAMES (visual order)
+hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
+
 # Bare workspace, no agents (also useful for jumping to a fresh layout)
 hopen-once.sh -n -l 22
 ```
 
-Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-n/--no-agents`, `-C/--path`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
+Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-N/--pane-name`, `-n/--no-agents`, `-C/--path`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
 
 `hopen-once.sh` shares layout/split/agent primitives with `hopen.sh` (`_h_build_layout`, `_start_agent`, etc.) and inherits the kind alias table. It bypasses `hopen-agents.conf` entirely — the kinds you pass are the kinds that get started, no merge with any template.
 

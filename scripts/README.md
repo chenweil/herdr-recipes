@@ -82,6 +82,7 @@ kind 本机没装都不会阻止布局完成，对应 pane 留干净 shell。
 ```toml
 [layout.12.panes.left]
 kind = "opencode"
+pane_name = "实现"           # 可选；不填 = 位置名（left / right-top 等）
 
 [layout.12.panes.right-top]
 kind = "pi"
@@ -90,6 +91,9 @@ kind = "pi"
 kind = "hermes"
 # prompt = "..."   # 可选；空 = agent 起来后空闲等输入
 ```
+
+`pane_name` 会交给 `herdr pane rename`，作为 pane 在 herdr 里的显示名。不填或填
+空串都回退到位置名本身（left / left-top / right-bottom 等）。
 
 ### 位置名（按视觉位置；脚本会把实际创建的 pane 映射到这些名字）
 
@@ -187,6 +191,7 @@ hopen-once.sh --layout CODE --kind K1 --prompt P1 --kind K2 --prompt P2 ...
 hopen-once.sh --path /tmp --layout 22 -k codex:4
 hopen-once.sh -C ../project -l 22 -k codex:4   # 相对路径
 hopen-once.sh -C ~ -l 22 -k codex:4            # 家目录
+hopen-once.sh --pane-name|-N NAME              # per-pane label（视觉顺序）
 hopen-once.sh --help
 ```
 
@@ -245,6 +250,56 @@ hopen-once.sh -l 22 -C /tmp -k codex:4
 
 Tab 创建后 herdr 会默认按数字命名（"1", "2", ...）；脚本会调 `herdr tab rename`
 把它重命名成同 workspace 一致的名字。
+
+### Pane 命名（`--pane-name` / `-N`）
+
+为每个 pane 设置 label，在 herdr pane tab 上显示。两种配置方式：
+
+**1. conf 驱位（`hopen.sh` + `hopen-agents.conf`）：**
+
+```toml
+[layout.22.panes.left-top]
+kind = "codex"
+pane_name = "实现-A"   # 出现在 herdr 的 left-top pane tab 上
+
+[layout.22.panes.right-bottom]
+kind = "pi"
+# 不填 → 默认 "right-bottom"
+```
+
+**2. 命令行临时（`hopen-once.sh`）：**
+
+`--pane-name`/`-N` 按视觉顺序传给 KINDS[] 同索引位置（跟 `--prompt` 一样）：
+
+```bash
+hopen-once.sh -l 22 \
+  -k codex -N "codex-A" -p "implement A" \
+  -k codex -N "codex-B" -p "implement B" \
+  -k pi   -N "review"   -p "review"
+
+hopen-once.sh -l 22 -k codex:2 -k pi:2 -N codex-A -N codex-B -N pi-A -N pi-B
+```
+
+**两个简写语法：**
+
+- 逗号分隔：`-N "A,B,C"` 等价于 `-N A -N B -N C`，头尾空白会被 trim。
+- 位置参数溢出：位置参数先填 KINDS[]（按视觉顺序），剩下的当 NAMES（prepend 到现有 NAMES 前面）。这样可以一行写完：
+
+```bash
+hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
+# KINDS=[pi pi codex], NAMES=[pi-top pi-bot cd-right]
+
+hopen-once.sh -l 22 -k codex:4 A B C D
+# KINDS=[codex×4], NAMES=[A B C D]
+
+hopen-once.sh -l 22 codex codex pi claude A B
+# KINDS=[codex codex pi claude], NAMES=[A B]，剩 2 个 pane 用位置名兜底
+```
+
+**缺省行为：** 不填 / 填空串 → 回退到位置名本身（left / left-top / right-bottom
+/ middle 等），所以所有 pane 都会获得一个可读的默认名。
+
+`-N` 是大写 N，因为 `-n` 被 `--no-agents` 占了。
 
 ### Kind 位置映射（行优先 / 视觉阅读顺序）
 
