@@ -9,6 +9,9 @@
 #   hopen-once.sh --no-agents|-n                  # build bare layout only
 #   hopen-once.sh --help|-h
 #
+# 重复同一 kind N 次：用 `K:N` 语法。`--kind codex:4` 等价于
+# `-k codex -k codex -k codex -k codex`，但只打一次。
+#
 # Short flags: -l layout, -k kind, -p prompt, -n no-agents, -h help.
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
@@ -60,16 +63,42 @@ print_help() {
   sed -n '2,28p' "${BASH_SOURCE[0]}"
 }
 
+# 把 "K" 或 "K:N" 展开成 1 或 N 条 KINDS。N 必须 1-9 开头的正整数。
+# `-k codex:4` 等价于 `-k codex -k codex -k codex -k codex`，但只打一次。
+_expand_kind() {
+  local raw="$1"
+  case "$raw" in
+    *:*)
+      local k="${raw%:*}" n="${raw#*:}"
+      if [ -z "$k" ]; then
+        echo "hopen-once: '$raw' 缺少 kind 部分" >&2; return 2
+      fi
+      if [[ "$n" =~ ^[1-9][0-9]*$ ]]; then
+        local i=0
+        while [ $i -lt "$n" ]; do
+          KINDS+=("$k")
+          i=$((i + 1))
+        done
+      else
+        echo "hopen-once: '$raw' 的计数 '$n' 不是正整数" >&2; return 2
+      fi
+      ;;
+    *)
+      KINDS+=("$raw")
+      ;;
+  esac
+}
+
 while [ $# -gt 0 ]; do
   case "$1" in
     --no-agents|-n) NO_AGENTS=1; shift ;;
-    --kind|-k)         KINDS+=("$2"); shift 2 ;;
-    --prompt|-p)       PROMPTS+=("$2"); shift 2 ;;
-    --layout|-l)       LAYOUT="$2"; shift 2 ;;
-    --help|-h)         print_help; exit 0 ;;
+    --kind|-k)       _expand_kind "$2" || exit 2; shift 2 ;;
+    --prompt|-p)     PROMPTS+=("$2"); shift 2 ;;
+    --layout|-l)     LAYOUT="$2"; shift 2 ;;
+    --help|-h)       print_help; exit 0 ;;
     --) shift; break ;;
     -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --layout/-l / --help/-h" >&2; exit 2 ;;
-    *)  KINDS+=("$1"); shift ;;
+    *)  _expand_kind "$1" || exit 2; shift ;;
   esac
 done
 
