@@ -49,12 +49,27 @@ HOPEN_CREATED_PANES=()
 _h_ws() {
   local out
   out=$(herdr workspace create --cwd "${2:-$PWD}" --label "$1" --no-focus) || return 1
-  jq -r '"\(.result.workspace.workspace_id) \(.result.root_pane.pane_id)"' <<<"$out"
+  jq -r '"\(.result.workspace.workspace_id) \(.result.root_pane.pane_id) \(.result.tab.tab_id)"' <<<"$out"
 }
 
 _h_split() {
   herdr pane split "$1" --direction "$2" --no-focus \
     | jq -r '.result.pane.pane_id'
+}
+
+# 从 path 推导 ws 标签：git repo 用分支名，否则用 basename（最后一层目录名）。
+# workspace 和 tab 都用这个标签，这样开多个 repo 的 ws 时在 tab bar 一眼能区分。
+# 不可读字符（实际 git 分支名不会出现这种情况，但保底）不特殊处理，jq 会原样回传。
+_label_for() {
+  local path="$1"
+  local branch
+  # git -C path rev-parse 在不是 repo / git 未装 / 无 HEAD 时返回非零
+  branch=$(git -C "$path" rev-parse --abbrev-ref HEAD 2>/dev/null) || branch=""
+  if [ -n "$branch" ] && [ "$branch" != "HEAD" ]; then
+    printf '%s' "$branch"
+  else
+    basename "$path"
+  fi
 }
 
 # 创建新 ws 并按 layout 代号完成所有 split。结果写全局 HOPEN_WS_ID 和
@@ -64,17 +79,27 @@ _h_split() {
 # 这是 hopen() 和 hopen-once.sh 共用的底层原语——避免重复实现 ws+split 流程。
 _h_build_layout() {
   local code="$1"
-  local label="${2:-hopen-$code-$(date +%H%M%S)}"
+  local label="${2:-}"
   local cwd="${3:-$PWD}"   # 新 ws 的根 pane cwd；split 会继承，无需逐个传
+
+  # 默认 label：从 cwd 推导（git repo → 分支名，否则 → basename）。
+  # 调用方传了 $2 时（hopen() 默认参数的场景）保留调用方的值。
+  [ -z "$label" ] && label=$(_label_for "$cwd")
 
   local steps
   steps=$(_steps_for "$code") || return 2
 
-  local ws_id root_pane
-  read -r ws_id root_pane < <(_h_ws "$label" "$cwd") || {
+  local ws_id root_pane tab_id
+  # 读 3 个字段：ws_id、root_pane、tab_id（tab 创建后 herdr 自动命名为数字序号，
+  # 所以后面还要 rename）
+  read -r ws_id root_pane tab_id < <(_h_ws "$label" "$cwd") || {
     echo "hopen: ws 创建失败" >&2
     return 1
   }
+
+  # 把 tab 也 rename 成同一个 label。这样 ws 列表和 tab bar 显示一致，
+  # 多个项目同时开着的时候一眼能分清。
+  herdr tab rename "$tab_id" "$label" >/dev/null 2>&1 || true
 
   local created=("$root_pane") parent="$root_pane" pid parent_tok direction line
   while IFS= read -r line; do
