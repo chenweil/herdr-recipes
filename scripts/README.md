@@ -147,3 +147,27 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
 | prompt 写错 / agent 拒收     | 跳过 prompt，agent 仍启动     |
 
 设计动机：你卸载 agent 或换工具链时，hopen 快捷键不会全废。
+
+## Kind 别名
+
+`_start_agent` 在调用 `herdr agent start --kind` 前会先过一遍 `_resolve_kind`，
+把所有别名还原成 herdr 接受的规范名。当前别名表（在 `hopen.sh` 顶部 `_resolve_kind`）：
+
+| 别名 | 解析为 | 备注 |
+|---|---|---|
+| `op` | `opencode` | |
+| `cc` | `claude` | 不是 `claudecode` —— herdr 的 kind 是 `claude` |
+| `cd` | `codex` | |
+| `pi` | `pi` | 等价于原名；保留是为了对称 |
+
+未列出的别名（如 `claude`、`hermes`、`qodercli`）原样传入 herdr。未来 herdr
+新增 kind 时不需要改 `_resolve_kind`，直接用全名即可。
+
+可以在三处用别名：
+
+1. `hopen-agents.conf` 的 `kind = "op"`（替代 `kind = "opencode"`）
+2. `hopen-once.sh` 的命令行参数（如果有）
+3. 直接调用 `hopen.sh` 时的 `--kind` / `--kind` / ...
+
+别名的目的：缩短配置和命令行的长度。`kind = "op"` 比 `kind = "opencode"`
+少 6 个字符，在密集配置的 conf 里能省不少。

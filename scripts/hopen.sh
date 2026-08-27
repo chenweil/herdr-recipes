@@ -29,6 +29,13 @@ set -euo pipefail
 
 HOPEN_CONF="${HOPEN_CONF:-$HOME/.config/herdr/scripts/hopen-agents.conf}"
 
+# Short aliases for agent kinds. User convenience — typing `op` instead
+# of `opencode` in hopen-agents.conf or hopen-once.sh. Edit freely.
+# Unknown aliases pass through unchanged so this stays forward-compatible
+# with future herdr kinds.
+# Implemented as a case statement (not associative array) for bash 3.2
+# compatibility — macOS ships bash 3.2 as /bin/bash.
+
 # 控制是否跳过 HOPEN_CONF 的 agent 派位。脚本顶层在调用 hopen() 前解析，
 # hopen() 内部据此决定是否进入派位循环。设为 1 = 只开布局。
 NO_AGENTS=0
@@ -142,10 +149,22 @@ _prompt_for() {
     || true
 }
 
+# Resolve a kind through _KIND_ALIASES. Unknown input passes through.
+_resolve_kind() {
+  case "$1" in
+    op) echo "opencode" ;;
+    cc) echo "claude"   ;;
+    cd) echo "codex"    ;;
+    pi) echo "pi"       ;;
+    *)  echo "$1"       ;;
+  esac
+}
+
 # 启动 agent。失败不阻断脚本，pane 留空；诊断信息仍写入 stderr。
 # 参数：agent_name pane_id kind [prompt]
 _start_agent() {
-  local name="$1" pane="$2" kind="$3" prompt="${4:-}" start_out
+  local name="$1" pane="$2" raw_kind="$3" prompt="${4:-}" start_out kind
+  kind=$(_resolve_kind "$raw_kind")
 
   # kind 本机不存在 → 跳过
   if ! command -v "$kind" >/dev/null 2>&1; then
