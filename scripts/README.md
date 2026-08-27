@@ -171,3 +171,65 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
 
 别名的目的：缩短配置和命令行的长度。`kind = "op"` 比 `kind = "opencode"`
 少 6 个字符，在密集配置的 conf 里能省不少。
+
+## hopen-once.sh — 命令行临时布局
+
+与 chord-driven 的 `hopen.sh` 并列：临时想开一个 layout、每个 pane 起什么
+agent 完全命令行指定，bypass `hopen-agents.conf`。
+
+### 用法
+
+```bash
+hopen-once.sh K1 K2 K3            # 3 kind → layout 12
+hopen-once.sh K1 K2 K3 K4         # 4 kind → layout 22
+hopen-once.sh --layout CODE K1 K2 K3 K4
+hopen-once.sh --layout CODE --kind K1 --prompt P1 --kind K2 --prompt P2 ...
+hopen-once.sh --no-agents --layout CODE
+hopen-once.sh --help
+```
+
+### 自动 layout
+
+| Kind 数 | 选用 layout |
+|---|---|
+| 3 | 12（左大 + 右列） |
+| 4 | 22（2x2） |
+| 其它 | 报错，要求 `--layout` 显式指定 |
+
+当前 repo 没有 5+ pane 的 layout code；如需更多 pane，先在 `hopen.sh` 的
+`_steps_for` 里加新 code + 在 `hopen-once.sh` 的 `_h_row_major` / `_panes_for`
+里补映射。
+
+### Kind 位置映射（行优先 / 视觉阅读顺序）
+
+`hopen.sh` 内部按列优先创建 pane。`hopen-once.sh` 把用户传入的 kind 按
+**行优先**（视觉阅读顺序）放到 pane：
+
+| layout | 顺序 |
+|---|---|
+| 12  | left → right-top → right-bottom |
+| 21  | left-top → left-bottom → right |
+| 13  | left → right-top → right-mid → right-bottom |
+| 31  | left-top → left-mid → left-bottom → right |
+| 22  | left-top → right-top → left-bottom → right-bottom |
+| 111 | left → middle → right |
+
+例：`hopen-once.sh --layout 22 codex codex pi claude` →
+- top-left → codex
+- top-right → codex
+- bottom-left → pi
+- bottom-right → claude
+
+### 与 hopen.sh 的区别
+
+| 维度 | hopen.sh | hopen-once.sh |
+|---|---|---|
+| 触发方式 | chord (`Cmd+B Alt+N`) 或 `bash hopen.sh 22` | `bash hopen-once.sh K1 K2 ...` |
+| Agent 来源 | `hopen-agents.conf` 模板 | 命令行 `--kind` / 位置参数 |
+| Layout 来源 | 必须给代码 | 自动选（3/4 kind）或 `--layout` |
+| Layout 改后行为 | 每次按 chord 都用同一套 agent | 每次命令独立，不污染 conf |
+| 适合场景 | 固定的"打开某 layout"流程 | 临时"我要 N 个 agent 干这活" |
+
+两者共用 `_h_build_layout / _position_for / _start_agent / _resolve_kind`，
+所以别名 (`op`/`cc`/`cd`/`pi`) 和 layout 表都互通。
+

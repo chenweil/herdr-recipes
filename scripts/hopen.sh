@@ -38,7 +38,13 @@ HOPEN_CONF="${HOPEN_CONF:-$HOME/.config/herdr/scripts/hopen-agents.conf}"
 
 # 控制是否跳过 HOPEN_CONF 的 agent 派位。脚本顶层在调用 hopen() 前解析，
 # hopen() 内部据此决定是否进入派位循环。设为 1 = 只开布局。
+# 保留为全局默认值；hopen() 函数内用同名 local 覆盖。hopen-once.sh 不读它。
 NO_AGENTS=0
+
+# _h_build_layout / hopen() 的共享状态：ws 创建 + 所有 pane split 完后填充。
+# 调用 _h_build_layout 后读 HOPEN_WS_ID 和 HOPEN_CREATED_PANES 即可拿到结果。
+HOPEN_WS_ID=""
+HOPEN_CREATED_PANES=()
 
 _h_ws() {
   local out
@@ -49,6 +55,49 @@ _h_ws() {
 _h_split() {
   herdr pane split "$1" --direction "$2" --no-focus \
     | jq -r '.result.pane.pane_id'
+}
+
+# 创建新 ws 并按 layout 代号完成所有 split。结果写全局 HOPEN_WS_ID 和
+# HOPEN_CREATED_PANES（按创建顺序，root 在 idx=0）。任何一步 split 失败会
+# 回滚已开 pane + 关 ws，函数返回非 0。
+#
+# 这是 hopen() 和 hopen-once.sh 共用的底层原语——避免重复实现 ws+split 流程。
+_h_build_layout() {
+  local code="$1"
+  local label="${2:-hopen-$code-$(date +%H%M%S)}"
+
+  local steps
+  steps=$(_steps_for "$code") || return 2
+
+  local ws_id root_pane
+  read -r ws_id root_pane < <(_h_ws "$label") || {
+    echo "hopen: ws 创建失败" >&2
+    return 1
+  }
+
+  local created=("$root_pane") parent="$root_pane" pid parent_tok direction line
+  while IFS= read -r line; do
+    [ -z "$line" ] && continue
+    parent_tok="${line%% *}"
+    direction="${line#* }"
+    case "$parent_tok" in
+      ROOT) parent="$root_pane" ;;
+      LAST) parent="$pid"      ;;
+      *) echo "hopen: 内部错 parent_tok=$parent_tok" >&2; return 1 ;;
+    esac
+    pid=$(_h_split "$parent" "$direction") || {
+      echo "hopen: split 失败，开始回滚" >&2
+      local p
+      for p in "${created[@]:-}"; do herdr pane close "$p" >/dev/null 2>&1 || true; done
+      herdr workspace close "$ws_id" >/dev/null 2>&1 || true
+      return 1
+    }
+    created+=("$pid")
+  done <<<"$steps"
+
+  HOPEN_WS_ID="$ws_id"
+  HOPEN_CREATED_PANES=("${created[@]}")
+  return 0
 }
 
 # layout 代号 -> step 列表
@@ -185,46 +234,47 @@ _start_agent() {
   fi
 }
 
+# hopen() — 按 conf 派位的入口函数。flag 在函数内解析，方便 source 后
+# 外部代码（比如 hopen-once.sh）直接调用 same hopen() 而不受顶层 flag
+# 解析的副作用影响。
+#
+# 输出契约：诊断日志写 stderr；stdout 只保留最后一行 `ws=... panes=...`。
 hopen() {
-  local code="${1:-}"
-  [ -n "$code" ] || { echo "用法: hopen <12|13|21|31|22|111>" >&2; return 2; }
+  local no_agents=0
+  local code=""
 
-  local steps
-  steps=$(_steps_for "$code") || return 2
-
-  local label="hopen-$code-$(date +%H%M%S)"
-  local ws_id root_pane
-  read -r ws_id root_pane < <(_h_ws "$label") || { echo "hopen: ws 创建失败" >&2; return 1; }
-
-  # workspace create 已经创建了 root pane；pane split 只返回新 pane。
-  # root 必须预先放入 created，才能保证 created[0] = root、后续 split 依次为 idx=1+。
-  # `_position_for` 和 agent 派位都依赖这个完整创建顺序。
-  local created=("$root_pane") parent="$root_pane" pid parent_tok direction line idx=0
-  while IFS= read -r line; do
-    [ -z "$line" ] && continue
-    parent_tok="${line%% *}"
-    direction="${line#* }"
-    case "$parent_tok" in
-      ROOT) parent="$root_pane" ;;
-      LAST) parent="$pid"      ;;
-      *) echo "hopen: 内部错 parent_tok=$parent_tok" >&2; return 1 ;;
+  # 内联 flag 解析
+  while [ $# -gt 0 ]; do
+    case "$1" in
+      --no-agents|-N) no_agents=1; shift ;;
+      --help|-h)
+        sed -n '2,18p' "${BASH_SOURCE[0]:-$0}"
+        return 0
+        ;;
+      --) shift; break ;;
+      -*)
+        echo "hopen: 未知选项 '$1'。支持: --no-agents / -N / --help" >&2
+        return 2
+        ;;
+      *) code="$1"; shift; break ;;
     esac
-    pid=$(_h_split "$parent" "$direction") || {
-      echo "hopen: split 失败，开始回滚" >&2
-      local p
-      for p in "${created[@]:-}"; do herdr pane close "$p" >/dev/null 2>&1 || true; done
-      herdr workspace close "$ws_id" >/dev/null 2>&1 || true
-      return 1
-    }
-    created+=("$pid")
-    idx=$((idx + 1))
-  done <<<"$steps"
+  done
+
+  [ -n "$code" ] || {
+    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-N]" >&2
+    return 2
+  }
+
+  _h_build_layout "$code" || return 1
+
+  local ws_id="${HOPEN_WS_ID}"
+  local -a created=("${HOPEN_CREATED_PANES[@]}")
 
   # 跳到新 ws
   herdr workspace focus "$ws_id" >/dev/null 2>&1 || true
 
   # 按 conf 启动 agent（layout 段缺失 / pane 缺失 / kind 缺失 / kind 写错 全跳）
-  if [ "$NO_AGENTS" -eq 0 ] && [ -f "$HOPEN_CONF" ]; then
+  if [ "$no_agents" -eq 0 ] && [ -f "$HOPEN_CONF" ]; then
     local i pos kind prompt
     for i in "${!created[@]}"; do
       pos=$(_position_for "$code" "$i")
@@ -244,24 +294,8 @@ hopen() {
   return 0
 }
 
-# 顶层入口：先吃掉 --no-agents/-N/--help，再把剩余位置参数交给 hopen()。
-# 这样 hopen() 的位置参数语义（第一个参数 = 布局代号）保持不变。
-while [ $# -gt 0 ]; do
-  case "$1" in
-    --no-agents|-N) NO_AGENTS=1; shift ;;
-    --help|-h)
-      sed -n '2,16p' "$0"
-      exit 0
-      ;;
-    --) shift; break ;;
-    -*)
-      echo "hopen: 未知选项 '$1'。支持: --no-agents / -N / --help" >&2
-      exit 2
-      ;;
-    *) break ;;
-  esac
-done
-
+# 顶层入口：只有脚本被直接执行（不是被 source）时才跑 hopen()。
+# 被 source 时 BASH_SOURCE[0] != $0，下面 if 不触发；外层 $@ 不被消费。
 if [ "${BASH_SOURCE[0]:-}" = "$0" ]; then
   hopen "$@"
 fi

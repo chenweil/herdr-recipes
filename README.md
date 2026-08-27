@@ -13,6 +13,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `scripts/README.md` | Detailed docs for the hopen / hopen-agents scripts |
 | `config/keys.toml` | All `[[keys.command]]` entries this repo manages |
 | `install.sh` | One-shot installer / upgrader / uninstaller |
+| `hopen-once.sh` | Ad-hoc layout + per-pane kinds via command line (no chord, no conf) |
 
 ## Key bindings (with default `cmd+b` prefix)
 
@@ -23,6 +24,39 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `prefix ctrl 1..6` | Open hopen layout (bare panes, no agents) — same codes |
 
 See `scripts/README.md` for layout code → visual layout mapping.
+
+## Ad-hoc layout via command line (`hopen-once.sh`)
+
+If the chord-based flow is hard to remember, run `hopen-once.sh` directly from any shell:
+
+```bash
+# Auto-pick layout from N kinds: 3 → 12 (left + right column), 4 → 22 (2x2)
+hopen-once.sh codex codex pi                # 3 panes, layout 12
+hopen-once.sh codex codex codex claude      # 4 panes, layout 22
+
+# Short aliases (resolved by _resolve_kind): op/cc/cd/pi
+hopen-once.sh op cd pi                       # 3 panes, layout 12
+
+# Explicit layout when auto-pick doesn't fit
+hopen-once.sh --layout 13 codex codex codex pi  # 4 panes, layout 13
+
+# Per-pane prompts (matched by index to kinds)
+hopen-once.sh --layout 22 \
+  --kind codex --prompt "implement A" \
+  --kind codex --prompt "implement B" \
+  --kind pi   --prompt "review"
+
+# Bare workspace, no agents (also useful for jumping to a fresh layout)
+hopen-once.sh --no-agents --layout 22
+```
+
+`hopen-once.sh` shares layout/split/agent primitives with `hopen.sh` (`_h_build_layout`, `_start_agent`, etc.) and inherits the kind alias table. It bypasses `hopen-agents.conf` entirely — the kinds you pass are the kinds that get started, no merge with any template.
+
+Kinds are placed in panes in visual reading order (left-to-right, top-to-bottom). Layout 22 with `codex codex pi claude` gives you:
+- top-left → codex
+- top-right → codex
+- bottom-left → pi
+- bottom-right → claude
 
 ## Install (one-time, per machine)
 
