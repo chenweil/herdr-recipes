@@ -4,10 +4,12 @@
 #
 # Usage:
 #   hopen-once.sh KIND1 KIND2 KIND3 [KIND4]
-#   hopen-once.sh --layout CODE KIND1 KIND2 ...
-#   hopen-once.sh --layout CODE --kind K1 --prompt P1 --kind K2 --prompt P2 ...
-#   hopen-once.sh --no-agents              # build bare layout only
-#   hopen-once.sh --help
+#   hopen-once.sh --layout|-l CODE KIND1 KIND2 ...
+#   hopen-once.sh --layout CODE --kind|-k K1 --prompt|-p P1 --kind K2 --prompt P2 ...
+#   hopen-once.sh --no-agents|-n                  # build bare layout only
+#   hopen-once.sh --help|-h
+#
+# Short flags: -l layout, -k kind, -p prompt, -n no-agents, -h help.
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
 #   3 kinds → 12 (left big + right column)
@@ -21,17 +23,17 @@
 # Per-pane prompts: --prompt P is matched to kinds by index. Missing
 # entries default to empty. Use --kind and --prompt alternately for clarity:
 #
-#   hopen-once.sh --layout 22 \
-#     --kind codex --prompt "implement A" \
-#     --kind codex --prompt "implement B" \
-#     --kind pi   --prompt "review"
+#   hopen-once.sh -l 22 \
+#     -k codex -p "implement A" \
+#     -k codex -p "implement B" \
+#     -k pi   -p "review"
 #
 # Examples:
 #   hopen-once.sh codex codex pi                    # 3 panes (layout 12)
 #   hopen-once.sh codex codex codex claude          # 4 panes (layout 22)
 #   hopen-once.sh op op cd                          # aliases → 12 layout
-#   hopen-once.sh --layout 13 codex codex codex pi  # 4 panes (layout 13)
-#   hopen-once.sh --no-agents                       # bare ws in current cwd
+#   hopen-once.sh -l 13 codex codex codex pi        # 4 panes (layout 13)
+#   hopen-once.sh -n                                # bare ws in current cwd
 #
 # Compared to hopen.sh:
 #   - Bypasses hopen-agents.conf entirely (no auto-dispatch)
@@ -60,13 +62,13 @@ print_help() {
 
 while [ $# -gt 0 ]; do
   case "$1" in
-    --no-agents|-N) NO_AGENTS=1; shift ;;
-    --kind)         KINDS+=("$2"); shift 2 ;;
-    --prompt)       PROMPTS+=("$2"); shift 2 ;;
-    --layout)       LAYOUT="$2"; shift 2 ;;
-    --help|-h)      print_help; exit 0 ;;
+    --no-agents|-n) NO_AGENTS=1; shift ;;
+    --kind|-k)         KINDS+=("$2"); shift 2 ;;
+    --prompt|-p)       PROMPTS+=("$2"); shift 2 ;;
+    --layout|-l)       LAYOUT="$2"; shift 2 ;;
+    --help|-h)         print_help; exit 0 ;;
     --) shift; break ;;
-    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-N / --kind / --prompt / --layout / --help/-h" >&2; exit 2 ;;
+    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --layout/-l / --help/-h" >&2; exit 2 ;;
     *)  KINDS+=("$1"); shift ;;
   esac
 done

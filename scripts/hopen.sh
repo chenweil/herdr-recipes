@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # hopen.sh — 按代号打开 herdr pane 布局，并按 conf 启动 agent
 #
-# 用法：  bash hopen.sh <12|13|21|31|22|111> [--no-agents|-N]
-#   --no-agents, -N   开布局但跳过 hopen-agents.conf，不启动任何 agent
+# 用法：  bash hopen.sh <12|13|21|31|22|111> [--no-agents|-n]
+#   --no-agents, -n   开布局但跳过 hopen-agents.conf，不启动任何 agent
 #
 # 代号（按"左列 + 右列"展开）：
 #   12   左 1 + 右 2    [A][B / C]
@@ -246,14 +246,14 @@ hopen() {
   # 内联 flag 解析
   while [ $# -gt 0 ]; do
     case "$1" in
-      --no-agents|-N) no_agents=1; shift ;;
+      --no-agents|-n) no_agents=1; shift ;;
       --help|-h)
         sed -n '2,18p' "${BASH_SOURCE[0]:-$0}"
         return 0
         ;;
       --) shift; break ;;
       -*)
-        echo "hopen: 未知选项 '$1'。支持: --no-agents / -N / --help" >&2
+        echo "hopen: 未知选项 '$1'。支持: --no-agents/-n / --help/-h" >&2
         return 2
         ;;
       *) code="$1"; shift; break ;;
@@ -261,7 +261,7 @@ hopen() {
   done
 
   [ -n "$code" ] || {
-    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-N]" >&2
+    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-n]" >&2
     return 2
   }
 
