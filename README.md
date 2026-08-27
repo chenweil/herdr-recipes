@@ -45,6 +45,12 @@ hopen-once.sh -l 22 -k codex:4               # 4 panes, all codex
 hopen-once.sh -l 22 -k codex:2 -k pi:2       # 2 codex + 2 pi (2x2)
 hopen-once.sh codex:4                       # positional also supports `K:N`
 
+# Open workspace in another directory (relative or absolute)
+hopen-once.sh -C /tmp -l 22 -k codex:4      # absolute path
+hopen-once.sh -C ../project -l 22 -k codex:4 # relative path (from current cwd)
+hopen-once.sh -C ~ -l 22 -k codex:4         # home dir
+# Default cwd is `.` (current directory), so omit -C to stay where you are.
+
 # Per-pane prompts (matched by index to kinds)
 hopen-once.sh -l 22 \
   -k codex -p "implement A" \

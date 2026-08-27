@@ -65,12 +65,13 @@ _h_split() {
 _h_build_layout() {
   local code="$1"
   local label="${2:-hopen-$code-$(date +%H%M%S)}"
+  local cwd="${3:-$PWD}"   # 新 ws 的根 pane cwd；split 会继承，无需逐个传
 
   local steps
   steps=$(_steps_for "$code") || return 2
 
   local ws_id root_pane
-  read -r ws_id root_pane < <(_h_ws "$label") || {
+  read -r ws_id root_pane < <(_h_ws "$label" "$cwd") || {
     echo "hopen: ws 创建失败" >&2
     return 1
   }

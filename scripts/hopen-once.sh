@@ -7,12 +7,13 @@
 #   hopen-once.sh --layout|-l CODE KIND1 KIND2 ...
 #   hopen-once.sh --layout CODE --kind|-k K1 --prompt|-p P1 --kind K2 --prompt P2 ...
 #   hopen-once.sh --no-agents|-n                  # build bare layout only
+#   hopen-once.sh --path|-C PATH                  # cwd for the new workspace (default: .)
 #   hopen-once.sh --help|-h
 #
 # 重复同一 kind N 次：用 `K:N` 语法。`--kind codex:4` 等价于
 # `-k codex -k codex -k codex -k codex`，但只打一次。
 #
-# Short flags: -l layout, -k kind, -p prompt, -n no-agents, -h help.
+# Short flags: -l layout, -k kind, -p prompt, -n no-agents, -C path, -h help.
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
 #   3 kinds → 12 (left big + right column)
@@ -58,9 +59,24 @@ LAYOUT=""
 NO_AGENTS=0
 KINDS=()
 PROMPTS=()
+PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
 print_help() {
-  sed -n '2,28p' "${BASH_SOURCE[0]}"
+  sed -n '2,32p' "${BASH_SOURCE[0]}"
+}
+
+# 把 --path 解析成绝对路径：展开 ~，相对路径相对当前 $PWD 解析，最后 cd && pwd 规范化。
+_resolve_path() {
+  local p="$1"
+  case "$p" in
+    "~"|"~/") p="$HOME" ;;
+    "~"/*)    p="$HOME/${p#\~/}" ;;
+  esac
+  # 先存回，交给 cd 规范化；目录不存在时 cd 会失败，保留原值给 herdr 报错
+  if [ -d "$p" ]; then
+    p="$(cd "$p" && pwd)" || true
+  fi
+  echo "$p"
 }
 
 # 把 "K" 或 "K:N" 展开成 1 或 N 条 KINDS。N 必须 1-9 开头的正整数。
@@ -95,12 +111,16 @@ while [ $# -gt 0 ]; do
     --kind|-k)       _expand_kind "$2" || exit 2; shift 2 ;;
     --prompt|-p)     PROMPTS+=("$2"); shift 2 ;;
     --layout|-l)     LAYOUT="$2"; shift 2 ;;
+    --path|-C)       PATH_ARG="$2"; shift 2 ;;
     --help|-h)       print_help; exit 0 ;;
     --) shift; break ;;
-    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --layout/-l / --help/-h" >&2; exit 2 ;;
+    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --layout/-l / --path/-C / --help/-h" >&2; exit 2 ;;
     *)  _expand_kind "$1" || exit 2; shift ;;
   esac
 done
+
+# Resolve --path to absolute (supports ~, relative, absolute). Default '.'.
+RESOLVED_PATH="$(_resolve_path "$PATH_ARG")" || exit 2
 
 # --- Determine layout ---
 if [ -z "$LAYOUT" ]; then
@@ -142,7 +162,7 @@ if [ "${#KINDS[@]}" -gt "$max_panes" ]; then
 fi
 
 # --- Build layout (shared with hopen.sh via _h_build_layout) ---
-_h_build_layout "$LAYOUT" || { echo "hopen-once: 布局创建失败" >&2; exit 1; }
+_h_build_layout "$LAYOUT" "" "$RESOLVED_PATH" || { echo "hopen-once: 布局创建失败" >&2; exit 1; }
 
 ws_id="${HOPEN_WS_ID}"
 created=( "${HOPEN_CREATED_PANES[@]}" )
