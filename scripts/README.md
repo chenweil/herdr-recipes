@@ -223,6 +223,29 @@ hopen-once.sh -C ~ -l 22 -k codex:4             # 家目录
 `_steps_for` 里加新 code + 在 `hopen-once.sh` 的 `_h_row_major` / `_panes_for`
 里补映射。
 
+### Workspace 和 Tab 命名
+
+新开的 workspace 和它的 tab 会自动用 cwd 推导一个名字（多个项目同时开着的时候
+一眼能分清）：
+
+- cwd 在 git repo 内 → 当前 git 分支名（`git rev-parse --abbrev-ref HEAD`）
+- cwd 不在 git repo 内 → `basename <cwd>`
+
+举例：
+
+```bash
+# cwd = ~/projects/foo (foo 是 repo，当前分支是 feature/login)
+hopen-once.sh -l 22 -k codex:2 -k pi:2
+# → ws label = "feature/login", tab title = "feature/login"
+
+# cwd = /tmp (不是 repo)
+hopen-once.sh -l 22 -C /tmp -k codex:4
+# → ws label = "tmp", tab title = "tmp"
+```
+
+Tab 创建后 herdr 会默认按数字命名（"1", "2", ...）；脚本会调 `herdr tab rename`
+把它重命名成同 workspace 一致的名字。
+
 ### Kind 位置映射（行优先 / 视觉阅读顺序）
 
 `hopen.sh` 内部按列优先创建 pane。`hopen-once.sh` 把用户传入的 kind 按

@@ -51,6 +51,12 @@ hopen-once.sh -C ../project -l 22 -k codex:4 # relative path (from current cwd)
 hopen-once.sh -C ~ -l 22 -k codex:4         # home dir
 # Default cwd is `.` (current directory), so omit -C to stay where you are.
 
+# Workspace + tab naming: ws label and tab title are auto-derived from
+# the workspace cwd:
+#   - git repo cwd  → git branch name (e.g. "main", "feature/foo")
+#   - non-repo cwd  → basename of cwd (e.g. "herdr-recipes", "tmp")
+# So multiple workspaces open side-by-side are easy to tell apart.
+
 # Per-pane prompts (matched by index to kinds)
 hopen-once.sh -l 22 \
   -k codex -p "implement A" \
