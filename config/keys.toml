@@ -1,0 +1,107 @@
+# config/keys.toml — managed [[keys.command]] block for herdr
+#
+# This file is appended into the [keys] section of ~/.config/herdr/config.toml
+# by install.sh, wrapped between marker comments so re-running install.sh
+# replaces this block cleanly.
+#
+# Patterns this repo manages (any [[keys.command]] matching these keys is
+# removed on install.sh run, before this block is inserted):
+#   prefix+1..6                    (pane number switching)
+#   prefix+(alt|ctrl)+1..6         (hopen layouts)
+#
+# The `prefix = "..."` setting is NOT managed here — install.sh bootstraps a
+# default prefix key only when [keys] has none. Change prefix by editing
+# ~/.config/herdr/config.toml directly; install.sh will not touch it.
+#
+# See scripts/README.md for layout codes, visual layouts, and hopen-agents.conf.
+
+# ── Pane number shortcuts (1-based within active workspace) ─────────
+[[keys.command]]
+key = "prefix+1"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 1"
+
+[[keys.command]]
+key = "prefix+2"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 2"
+
+[[keys.command]]
+key = "prefix+3"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 3"
+
+[[keys.command]]
+key = "prefix+4"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 4"
+
+[[keys.command]]
+key = "prefix+5"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 5"
+
+[[keys.command]]
+key = "prefix+6"
+command = "python3 ~/.config/herdr/scripts/herdr-pane-switch.py 6"
+
+# ── hopen: numbered pane layouts (auto-start agents) ─────────────────
+# Each code opens a new herdr workspace with the matching layout, then
+# dispatches agents from scripts/hopen-agents.conf.
+[[keys.command]]
+key = "prefix+alt+1"
+command = "bash ~/.config/herdr/scripts/hopen.sh 12"
+description = "hopen 12 — [A][B/C]"
+
+[[keys.command]]
+key = "prefix+alt+2"
+command = "bash ~/.config/herdr/scripts/hopen.sh 21"
+description = "hopen 21 — [A/B][C] mirror"
+
+[[keys.command]]
+key = "prefix+alt+3"
+command = "bash ~/.config/herdr/scripts/hopen.sh 22"
+description = "hopen 22 — [A/B][C/D] 2x2"
+
+[[keys.command]]
+key = "prefix+alt+4"
+command = "bash ~/.config/herdr/scripts/hopen.sh 13"
+description = "hopen 13 — [A][B/C/D]"
+
+[[keys.command]]
+key = "prefix+alt+5"
+command = "bash ~/.config/herdr/scripts/hopen.sh 31"
+description = "hopen 31 — [A/B/C][D] mirror"
+
+[[keys.command]]
+key = "prefix+alt+6"
+command = "bash ~/.config/herdr/scripts/hopen.sh 111"
+description = "hopen 111 — [A][B][C]"
+
+# ── hopen: bare layouts (no auto-start agents) ───────────────────────
+# Same codes; panes stay as clean shells. Pair with the "with agents"
+# pair above: alt = with, ctrl = bare.
+[[keys.command]]
+key = "prefix+ctrl+1"
+command = "bash ~/.config/herdr/scripts/hopen.sh 12 --no-agents"
+description = "hopen 12 (bare) — [A][B/C]"
+
+[[keys.command]]
+key = "prefix+ctrl+2"
+command = "bash ~/.config/herdr/scripts/hopen.sh 21 --no-agents"
+description = "hopen 21 (bare) — [A/B][C]"
+
+[[keys.command]]
+key = "prefix+ctrl+3"
+command = "bash ~/.config/herdr/scripts/hopen.sh 22 --no-agents"
+description = "hopen 22 (bare) — [A/B][C/D] 2x2"
+
+[[keys.command]]
+key = "prefix+ctrl+4"
+command = "bash ~/.config/herdr/scripts/hopen.sh 13 --no-agents"
+description = "hopen 13 (bare) — [A][B/C/D]"
+
+[[keys.command]]
+key = "prefix+ctrl+5"
+command = "bash ~/.config/herdr/scripts/hopen.sh 31 --no-agents"
+description = "hopen 31 (bare) — [A/B/C][D]"
+
+[[keys.command]]
+key = "prefix+ctrl+6"
+command = "bash ~/.config/herdr/scripts/hopen.sh 111 --no-agents"
+description = "hopen 111 (bare) — [A][B][C]"
