@@ -184,9 +184,32 @@ hopen-once.sh K1 K2 K3            # 3 kind → layout 12
 hopen-once.sh K1 K2 K3 K4         # 4 kind → layout 22
 hopen-once.sh --layout CODE K1 K2 K3 K4
 hopen-once.sh --layout CODE --kind K1 --prompt P1 --kind K2 --prompt P2 ...
-hopen-once.sh --no-agents --layout CODE
+hopen-once.sh --path /tmp --layout 22 -k codex:4
+hopen-once.sh -C ../project -l 22 -k codex:4   # 相对路径
+hopen-once.sh -C ~ -l 22 -k codex:4            # 家目录
 hopen-once.sh --help
 ```
+
+### 指定 workspace 的 cwd（`--path` / `-C`）
+
+`hopen-once.sh` 默认在当前 shell 的 `$PWD` 下开新 workspace。通过 `--path`
+（短形式 `-C`）可以指定新 workspace 的根目录：
+
+```bash
+hopen-once.sh -C /tmp -l 22 -k codex:4           # 绝对路径
+hopen-once.sh -C ../project -l 22 -k codex:4    # 相对路径
+hopen-once.sh -C ~ -l 22 -k codex:4             # 家目录
+```
+
+路径解析规则：
+
+- 以 `~` 开头：展开为 `$HOME`
+- 相对路径：相对当前 shell 的 `$PWD` 解析为绝对路径
+- 目录不存在：保留原值传给 `herdr workspace create`，由 herdr 报错
+- 默认值：`.`（即当前 `$PWD`），省略 `--path` 时行为不变
+
+`hopen.sh` 本身不暴露 `--path`；如果需要固定 cwd，可在 keybinding 里
+把 `--path /some/dir` 硬编码进去。
 
 ### 自动 layout
 
@@ -229,6 +252,7 @@ hopen-once.sh --help
 | Layout 来源 | 必须给代码 | 自动选（3/4 kind）或 `--layout` |
 | Layout 改后行为 | 每次按 chord 都用同一套 agent | 每次命令独立，不污染 conf |
 | 适合场景 | 固定的"打开某 layout"流程 | 临时"我要 N 个 agent 干这活" |
+| Workspace cwd | 默认当前 `$PWD` | 默认当前 `$PWD`；可用 `--path/-C` 覆盖 |
 
 两者共用 `_h_build_layout / _position_for / _start_agent / _resolve_kind`，
 所以别名 (`op`/`cc`/`cd`/`pi`) 和 layout 表都互通。

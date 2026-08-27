@@ -61,7 +61,7 @@ hopen-once.sh -l 22 \
 hopen-once.sh -n -l 22
 ```
 
-Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-n/--no-agents`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
+Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-n/--no-agents`, `-C/--path`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
 
 `hopen-once.sh` shares layout/split/agent primitives with `hopen.sh` (`_h_build_layout`, `_start_agent`, etc.) and inherits the kind alias table. It bypasses `hopen-agents.conf` entirely — the kinds you pass are the kinds that get started, no merge with any template.
 
