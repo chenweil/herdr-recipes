@@ -9,12 +9,13 @@
 #   hopen-once.sh --no-agents|-n                  # build bare layout only
 #   hopen-once.sh --path|-C PATH                  # cwd for the new workspace (default: .)
 #   hopen-once.sh --pane-name|-N "A,B,C"         # comma-separated, equivalent to -N A -N B -N C
+#   hopen-once.sh --version|-v|-V                 # print version and exit
 #   hopen-once.sh --help|-h
 #
 # 重复同一 kind N 次：用 `K:N` 语法。`--kind codex:4` 等价于
 # `-k codex -k codex -k codex -k codex`，但只打一次。
 #
-# Short flags: -l layout, -k kind, -p prompt, -N pane-name, -n no-agents, -C path, -h help.
+# Short flags: -l layout, -k kind, -p prompt, -N pane-name, -n no-agents, -C path, -v version, -h help.
 # (-N 是大写 N，因为 -n 被 --no-agents 占了。)
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
@@ -95,7 +96,7 @@ NAMES=()        # pane label 列表，跟 KINDS[] 同索引（视觉顺序）
 PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
 print_help() {
-  sed -n '2,32p' "${BASH_SOURCE[0]}"
+  sed -n '2,34p' "${BASH_SOURCE[0]}"
 }
 
 # 把 --path 解析成绝对路径：展开 ~，相对路径相对当前 $PWD 解析，最后 cd && pwd 规范化。
@@ -172,9 +173,10 @@ while [ $# -gt 0 ]; do
     --pane-name|-N)  _expand_name "$2"; shift 2 ;;
     --layout|-l)     LAYOUT="$2"; shift 2 ;;
     --path|-C)       PATH_ARG="$2"; shift 2 ;;
+    --version|-v|-V) _hr_print_version hopen-once; exit 0 ;;
     --help|-h)       print_help; exit 0 ;;
     --) shift; break ;;
-    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --pane-name/-N / --layout/-l / --path/-C / --help/-h" >&2; exit 2 ;;
+    -*) echo "hopen-once: 未知选项 '$1'。支持: --no-agents/-n / --kind/-k / --prompt/-p / --pane-name/-N / --layout/-l / --path/-C / --version/-v / --help/-h" >&2; exit 2 ;;
     *)  _expand_kind "$1" || exit 2; shift ;;
   esac
 done

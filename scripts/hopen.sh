@@ -3,6 +3,7 @@
 #
 # 用法：  bash hopen.sh <12|13|21|31|22|111> [--no-agents|-n]
 #   --no-agents, -n   开布局但跳过 hopen-agents.conf，不启动任何 agent
+#   --version, -v/-V  打印版本号后退出
 #
 # 代号（按"左列 + 右列"展开）：
 #   12   左 1 + 右 2    [A][B / C]
@@ -26,6 +27,11 @@
 #   6. 成功创建的 ws 不由脚本自动清理；只有 split 失败时才走回滚，正常关闭由用户负责
 
 set -euo pipefail
+
+# 版本号读取（_hr_version / _hr_print_version）。source 进来而不是硬编码，
+# 这样 hopen-once.sh source hopen.sh 时也一并拿到，无需各自实现。
+# shellcheck source=version.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/version.sh"
 
 HOPEN_CONF="${HOPEN_CONF:-$HOME/.config/herdr/scripts/hopen-agents.conf}"
 
@@ -357,13 +363,17 @@ hopen() {
   while [ $# -gt 0 ]; do
     case "$1" in
       --no-agents|-n) no_agents=1; shift ;;
+      --version|-v|-V)
+        _hr_print_version hopen
+        return 0
+        ;;
       --help|-h)
-        sed -n '2,18p' "${BASH_SOURCE[0]:-$0}"
+        sed -n '2,19p' "${BASH_SOURCE[0]:-$0}"
         return 0
         ;;
       --) shift; break ;;
       -*)
-        echo "hopen: 未知选项 '$1'。支持: --no-agents/-n / --help/-h" >&2
+        echo "hopen: 未知选项 '$1'。支持: --no-agents/-n / --version/-v / --help/-h" >&2
         return 2
         ;;
       *) code="$1"; shift; break ;;
@@ -371,7 +381,7 @@ hopen() {
   done
 
   [ -n "$code" ] || {
-    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-n]" >&2
+    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-n] [--version|-v]" >&2
     return 2
   }
 

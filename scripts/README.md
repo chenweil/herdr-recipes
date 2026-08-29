@@ -2,6 +2,24 @@
 
 `config.toml` 里 `[[keys.command]]` 调到的本地脚本都放这里。
 
+## version.sh — 版本号读取
+
+版本号存在仓库根的 `VERSION` 文件，`version.sh` 是唯一读取入口，
+被 `hopen.sh` / `hopen-once.sh` / `herdr-pane-switch.sh` / `install.sh` source；
+`herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
+
+```bash
+hopen.sh -v                 # hopen 0.3.0
+hopen-once.sh --version     # hopen-once 0.3.0
+herdr-pane-switch.sh -V     # herdr-pane-switch 0.3.0
+```
+
+安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
+`pwd -P` 解析真实路径再拼 `../VERSION`；用逻辑路径会落到
+`~/.config/herdr/VERSION`（不存在）。读不到时输出 `unknown` 而不报错。
+
+每个版本改了什么看仓库根的 [CHANGELOG.md](../CHANGELOG.md)。
+
 ## hopen.sh — 按代号开 herdr pane 布局
 
 `hopen.sh` 接收一个布局代号，开一个新的 herdr workspace 摆好对应布局，

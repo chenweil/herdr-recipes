@@ -12,6 +12,7 @@
 # Usage:
 #   ./install.sh              install or upgrade
 #   ./install.sh --uninstall  remove managed block and unlink scripts/
+#   ./install.sh --version    print version and exit
 #
 # Env vars:
 #   HERDR_HOME      override herdr config dir (default: ~/.config/herdr)
@@ -31,6 +32,10 @@ MARKER_END="# <<< herdr-recipes managed: end <<<"
 
 PREFIX_DEFAULT="${PREFIX_DEFAULT:-cmd+b}"
 
+# 版本号读取入口（跟 scripts/ 里的脚本共用同一个 VERSION 文件）。
+# shellcheck source=scripts/version.sh
+source "$SCRIPTS_SRC/version.sh"
+
 say()  { printf '\033[1;34m[herdr-recipes]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[herdr-recipes]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[herdr-recipes]\033[0m %s\n' "$*" >&2; exit 1; }
@@ -40,8 +45,9 @@ ACTION="install"
 while [ $# -gt 0 ]; do
   case "$1" in
     --uninstall|-u) ACTION="uninstall"; shift ;;
+    --version|-v|-V) _hr_print_version herdr-recipes; exit 0 ;;
     --help|-h)
-      sed -n '2,21p' "$0"
+      sed -n '2,23p' "$0"
       exit 0
       ;;
     -*) die "unknown option: $1" ;;

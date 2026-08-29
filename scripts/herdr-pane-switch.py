@@ -1,8 +1,28 @@
 #!/usr/bin/env python3
-"""herdr-pane-switch: switch to the N-th pane (1-based) in the active workspace."""
+"""herdr-pane-switch: switch to the N-th pane (1-based) in the active workspace.
+
+Usage:
+    herdr-pane-switch.py [1..6]
+    herdr-pane-switch.py -v | -V | --version
+"""
 import json, os, socket, select, subprocess, sys
 
 SOCK = os.path.expanduser("~/.config/herdr/herdr.sock")
+
+
+def read_version():
+    """从仓库根的 VERSION 文件读版本号。
+
+    跟 scripts/version.sh 共用同一个文件，发版只改一处。
+    读不到时返回 "unknown"——版本号只用于显示，缺失不该让脚本挂掉。
+    安装后 scripts/ 是 symlink，realpath 能解析到仓库真实路径。
+    """
+    here = os.path.dirname(os.path.realpath(__file__))
+    try:
+        with open(os.path.join(here, os.pardir, "VERSION")) as f:
+            return f.readline().strip() or "unknown"
+    except OSError:
+        return "unknown"
 
 def socket_rpc(method, params):
     req = {"jsonrpc": "2.0", "id": "1", "method": method, "params": params}
@@ -26,7 +46,11 @@ def socket_rpc(method, params):
     return {}
 
 def main():
-    idx = int(sys.argv[1]) if len(sys.argv) > 1 else 1
+    args = sys.argv[1:]
+    if args and args[0] in ("-v", "-V", "--version"):
+        print("herdr-pane-switch %s" % read_version())
+        return
+    idx = int(args[0]) if args else 1
 
     # 1. List all panes via CLI
     r = subprocess.run(["herdr", "pane", "list"], capture_output=True, text=True, timeout=5)

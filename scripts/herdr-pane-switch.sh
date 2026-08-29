@@ -1,8 +1,17 @@
 #!/bin/bash
 # herdr-pane-switch: switch to pane by index (1-based)
 # Usage: herdr-pane-switch 1..6
+#        herdr-pane-switch -v|-V|--version
 # Reads HERDR_SOCKET_PATH if set, otherwise uses default.
 set -euo pipefail
+
+# 版本号读取（_hr_print_version）。
+# shellcheck source=version.sh
+source "$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)/version.sh"
+
+case "${1:-}" in
+  -v|-V|--version) _hr_print_version herdr-pane-switch; exit 0 ;;
+esac
 
 IDX="${1:-1}"
 

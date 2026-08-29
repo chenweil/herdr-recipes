@@ -7,13 +7,31 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | File | Purpose |
 |---|---|
 | `scripts/hopen.sh` | Open a numbered-pane layout (`12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
-| `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) |
+| `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/herdr-pane-switch.sh` | Same as above, bash + python helper for machines without standalone python |
+| `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
 | `scripts/README.md` | Detailed docs for the hopen / hopen-agents scripts |
 | `config/keys.toml` | All `[[keys.command]]` entries this repo manages |
 | `install.sh` | One-shot installer / upgrader / uninstaller |
 | `hopen-once.sh` | Ad-hoc layout + per-pane kinds via command line (no chord, no conf) |
+| `VERSION` | Single source of truth for the version number |
+| `CHANGELOG.md` | What changed in each release |
+
+## Version
+
+Every script accepts `-v`, `-V`, or `--version`:
+
+```bash
+./install.sh --version                  # herdr-recipes 0.3.0
+scripts/hopen.sh -v                     # hopen 0.3.0
+scripts/hopen-once.sh -v                # hopen-once 0.3.0
+scripts/herdr-pane-switch.sh -v         # herdr-pane-switch 0.3.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.3.0
+```
+
+The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
+reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release notes.
 
 ## Key bindings (with default `cmd+b` prefix)
 
@@ -79,7 +97,7 @@ hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
 hopen-once.sh -n -l 22
 ```
 
-Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-N/--pane-name`, `-n/--no-agents`, `-C/--path`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
+Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-N/--pane-name`, `-n/--no-agents`, `-C/--path`, `-v/--version`, `-h/--help`. Both long and short forms are accepted; mixed forms (e.g. `-n --layout 22`) work too.
 
 `hopen-once.sh` shares layout/split/agent primitives with `hopen.sh` (`_h_build_layout`, `_start_agent`, etc.) and inherits the kind alias table. It bypasses `hopen-agents.conf` entirely — the kinds you pass are the kinds that get started, no merge with any template.
 
@@ -157,6 +175,18 @@ Comment out the corresponding `[[keys.command]]` line in `config/keys.toml`. Aft
 ## Layout on disk
 
 ```
+<repo>/
+├── VERSION                       ← version number (read by every script)
+├── CHANGELOG.md
+├── install.sh
+├── config/keys.toml
+└── scripts/
+    ├── version.sh                ← sourced by the shell scripts for -v
+    ├── hopen.sh
+    ├── hopen-once.sh
+    ├── hopen-agents.conf
+    └── herdr-pane-switch.{sh,py}
+
 ~/.config/herdr/
 ├── config.toml                  ← modified by install.sh (managed block inside [keys])
 └── scripts/                     → symlink to <repo>/scripts/
