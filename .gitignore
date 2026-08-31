@@ -1,0 +1,9 @@
+# skillcaddy 生成的 skill 链接：全是指向 ~/skillcaddy 的绝对路径 symlink，
+# 带用户名、机器相关，clone 到别的机器全是断链。两个目录内容互为镜像，
+# 分别给不同 agent 认路用。
+.agents/
+.claude/
+
+# Python
+__pycache__/
+*.pyc
