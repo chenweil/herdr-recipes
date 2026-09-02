@@ -1,11 +1,12 @@
 #!/usr/bin/env bash
 # hopen.sh — 按代号打开 herdr pane 布局，并按 conf 启动 agent
 #
-# 用法：  bash hopen.sh <12|13|21|31|22|111> [--no-agents|-n]
+# 用法：  bash hopen.sh <11|12|13|21|31|22|111> [--no-agents|-n]
 #   --no-agents, -n   开布局但跳过 hopen-agents.conf，不启动任何 agent
 #   --version, -v/-V  打印版本号后退出
 #
 # 代号（按"左列 + 右列"展开）：
+#   11   左 1 + 右 1    [A][B]
 #   12   左 1 + 右 2    [A][B / C]
 #   21   右 1 + 左 2    [A / B][C]
 #   13   左 1 + 右 3    [A][B / C / D]
@@ -21,7 +22,7 @@
 # 设计原则：
 #   1. 不硬编码 pane ID —— 全从 herdr 命令返回值取
 #   2. 失败回滚 —— 任一 split 失败立刻关掉已开 pane + 关掉 ws
-#   3. 不影响当前 ws —— 脚本开新 ws，所以 `prefix+alt+1..6` 在任何 ws 按都一样
+#   3. 不影响当前 ws —— 脚本开新 ws，所以 `prefix+alt+1..7` 在任何 ws 按都一样
 #   4. agent 启动失败不影响布局 —— pane 留干净 shell 给用户
 #   5. 命令对 herdr 0.8.0 --help 实测；布局数量对 split 实测
 #   6. 成功创建的 ws 不由脚本自动清理；只有 split 失败时才走回滚，正常关闭由用户负责
@@ -194,6 +195,7 @@ _h_build_layout() {
 #                 LAST  (从上一个创建的 pane 分裂)
 #   direction:    right / down
 #
+# 11: [A][B]              -> ROOT right (B)
 # 12: [A][B/C]            -> ROOT right (B), LAST down (C)
 # 21: [A/B][C]            -> ROOT right (C), ROOT down (B)   ← 镜像，先抢右列
 # 13: [A][B/C/D]          -> ROOT right (B), LAST down (C), LAST down (D)
@@ -202,6 +204,7 @@ _h_build_layout() {
 # 111: [A][B][C]          -> ROOT right (B), LAST right (C)
 _steps_for() {
   case "$1" in
+    11)  printf 'ROOT right\n' ;;
     12)  printf 'ROOT right\nLAST down\n' ;;
     21)  printf 'ROOT right\nROOT down\n' ;;
     13)  printf 'ROOT right\nLAST down\nLAST down\n' ;;
@@ -209,7 +212,7 @@ _steps_for() {
     22)  printf 'ROOT right\nLAST down\nROOT down\n' ;;
     111) printf 'ROOT right\nLAST right\n' ;;
     *)
-      echo "hopen: 未知布局 '$1'。支持: 12 13 21 31 22 111" >&2
+      echo "hopen: 未知布局 '$1'。支持: 11 12 13 21 31 22 111" >&2
       return 2 ;;
   esac
 }
@@ -223,6 +226,7 @@ _steps_for() {
 #   21: ROOT right 先创建 idx=1 的 right，ROOT down 再创建 idx=2 的 left-bottom；
 #   22: ROOT right 创建 right-top，LAST down 创建 right-bottom，ROOT down 创建 left-bottom。
 # 完整的创建 idx → 视觉位置顺序是：
+#   11: left / right
 #   12: left / right-top / right-bottom
 #   21: left-top / right / left-bottom
 #   13: left / right-top / right-mid / right-bottom
@@ -230,6 +234,7 @@ _steps_for() {
 #   22: left-top / right-top / right-bottom / left-bottom
 #   111: left / middle / right
 # section 名仍然是给 conf 使用的人类视觉位置
+#   11: [A left][B right]
 #   12: [A left][B right-top][C right-bottom]
 #   21: [A left-top][B left-bottom][C right]
 #   13: [A left][B right-top][C right-mid][D right-bottom]
@@ -241,6 +246,7 @@ _steps_for() {
 _position_for() {
   local code="$1" idx="$2"
   case "$code:$idx" in
+    11:0) echo left           ;; 11:1) echo right              ;;
     12:0) echo left           ;; 12:1) echo right-top        ;; 12:2) echo right-bottom ;;
     21:0) echo left-top       ;; 21:1) echo right             ;; 21:2) echo left-bottom  ;;
     13:0) echo left           ;; 13:1) echo right-top        ;;
@@ -308,6 +314,7 @@ _pane_name_for() {
 # _steps_for 更可靠，也避免 `$(( $(多行) + 1 ))` 被算术上下文当变量查的陷阱。
 _panes_for() {
   case "$1" in
+    11)        echo 2 ;;
     12|21|111) echo 3 ;;
     13|31|22)  echo 4 ;;
     *)         echo 0 ;;
@@ -381,7 +388,7 @@ hopen() {
   done
 
   [ -n "$code" ] || {
-    echo "用法: hopen <12|13|21|31|22|111> [--no-agents|-n] [--version|-v]" >&2
+    echo "用法: hopen <11|12|13|21|31|22|111> [--no-agents|-n] [--version|-v]" >&2
     return 2
   }
 

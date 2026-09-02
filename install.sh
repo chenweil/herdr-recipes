@@ -132,7 +132,7 @@ cfg_text = managed_pat.sub("", cfg_text)
 # 2. Strip legacy [[keys.command]] blocks matching our patterns
 #    (handles upgrades from manual setups that pre-date this repo).
 #    A block ends at the next line starting with `[` (next section or array header).
-legacy_keys = [r"^prefix\+[1-6]$", r"^prefix\+(alt|ctrl)\+[1-6]$"]
+legacy_keys = [r"^prefix\+[1-6]$", r"^prefix\+(alt|ctrl)\+[1-7]$"]
 block_pat = re.compile(r"^(\[\[keys\.command\]\][\s\S]*?)(?=^\[|\Z)", re.MULTILINE)
 def legacy_filter(m):
     block = m.group(1)

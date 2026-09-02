@@ -19,6 +19,7 @@
 # (-N 是大写 N，因为 -n 被 --no-agents 占了。)
 #
 # Layout auto-pick (when --layout omitted, based on N kinds):
+#   2 kinds → 11 (side by side)
 #   3 kinds → 12 (left big + right column)
 #   4 kinds → 22 (2x2)
 #   other   → error (use --layout for non-default)
@@ -52,6 +53,7 @@
 #   hopen-once.sh -l 22 codex codex pi claude A B    # 第 3、4 pane 用位置名兜底
 #
 # Examples:
+#   hopen-once.sh codex pi                          # 2 panes (layout 11)
 #   hopen-once.sh codex codex pi                    # 3 panes (layout 12)
 #   hopen-once.sh codex codex codex claude          # 4 panes (layout 22)
 #   hopen-once.sh op op cd                          # aliases → 12 layout
@@ -78,6 +80,7 @@ source "$SCRIPT_DIR/hopen.sh"
 # 行优先的。用这个函数把用户传的 NAMES[] 跟 KINDS[] 反查回 created[] 顺序。
 _h_row_major() {
   case "$1" in
+    11)  printf 'left\nright\n' ;;
     12)  printf 'left\nright-top\nright-bottom\n' ;;
     21)  printf 'left-top\nleft-bottom\nright\n' ;;
     13)  printf 'left\nright-top\nright-mid\nright-bottom\n' ;;
@@ -96,7 +99,7 @@ NAMES=()        # pane label 列表，跟 KINDS[] 同索引（视觉顺序）
 PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
 print_help() {
-  sed -n '2,34p' "${BASH_SOURCE[0]}"
+  sed -n '2,66p' "${BASH_SOURCE[0]}"
 }
 
 # 把 --path 解析成绝对路径：展开 ~，相对路径相对当前 $PWD 解析，最后 cd && pwd 规范化。
@@ -187,12 +190,13 @@ RESOLVED_PATH="$(_resolve_path "$PATH_ARG")" || exit 2
 # --- Determine layout ---
 if [ -z "$LAYOUT" ]; then
   case "${#KINDS[@]}" in
+    2) LAYOUT=11 ;;
     3) LAYOUT=12 ;;
     4) LAYOUT=22 ;;
     *)
-      echo "hopen-once: 没有 --layout，且 kind 数量 ${#KINDS[@]} 不支持自动布局（3 → 12，4 → 22）" >&2
-      echo "             传 --layout CODE 显式指定，或调整 kind 数为 3 或 4" >&2
-      echo "             支持: 12 21 22 13 31 111" >&2
+      echo "hopen-once: 没有 --layout，且 kind 数量 ${#KINDS[@]} 不支持自动布局（2 → 11，3 → 12，4 → 22）" >&2
+      echo "             传 --layout CODE 显式指定，或调整 kind 数为 2、3 或 4" >&2
+      echo "             支持: 11 12 21 22 13 31 111" >&2
       exit 2
       ;;
   esac
@@ -200,7 +204,7 @@ fi
 
 # Validate layout (also gives a friendly error if user passes a typo)
 if ! _steps_for "$LAYOUT" >/dev/null 2>&1; then
-  echo "hopen-once: 未知布局 '$LAYOUT'。支持: 12 21 22 13 31 111" >&2
+  echo "hopen-once: 未知布局 '$LAYOUT'。支持: 11 12 21 22 13 31 111" >&2
   exit 2
 fi
 

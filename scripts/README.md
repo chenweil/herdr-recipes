@@ -9,9 +9,9 @@
 `herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
-hopen.sh -v                 # hopen 0.3.0
-hopen-once.sh --version     # hopen-once 0.3.0
-herdr-pane-switch.sh -V     # herdr-pane-switch 0.3.0
+hopen.sh -v                 # hopen 0.4.0
+hopen-once.sh --version     # hopen-once 0.4.0
+herdr-pane-switch.sh -V     # herdr-pane-switch 0.4.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
@@ -27,6 +27,7 @@ herdr-pane-switch.sh -V     # herdr-pane-switch 0.3.0
 
 | 代号 | 视觉布局       | 用途                    |
 |------|---------------|-------------------------|
+| 11   | `[A][B]`      | 左右对半               |
 | 12   | `[A][B/C]`    | 左大右两窄              |
 | 21   | `[A/B][C]`    | 镜像 12                 |
 | 13   | `[A][B/C/D]`  | 左大右三窄              |
@@ -57,7 +58,7 @@ key = "prefix+alt+1"
 command = "bash ~/.config/herdr/scripts/hopen.sh 12"
 description = "hopen 12 — [A][B/C]"
 
-# 2..6 同理绑到 21/22/13/31/111
+# 2..6 同理绑到 21/22/13/31/111，7 绑 11
 ```
 
 配置改完后热重载：
@@ -117,6 +118,7 @@ kind = "hermes"
 
 | 代号 | 位置 |
 |------|------|
+| 11   | left / right |
 | 12   | left / right-top / right-bottom |
 | 21   | left-top / left-bottom / right |
 | 13   | left / right-top / right-mid / right-bottom |
@@ -202,6 +204,7 @@ agent 完全命令行指定，bypass `hopen-agents.conf`。
 ### 用法
 
 ```bash
+hopen-once.sh K1 K2                # 2 kind → layout 11
 hopen-once.sh K1 K2 K3            # 3 kind → layout 12
 hopen-once.sh K1 K2 K3 K4         # 4 kind → layout 22
 hopen-once.sh --layout CODE K1 K2 K3 K4
@@ -238,6 +241,7 @@ hopen-once.sh -C ~ -l 22 -k codex:4             # 家目录
 
 | Kind 数 | 选用 layout |
 |---|---|
+| 2 | 11（左右对半） |
 | 3 | 12（左大 + 右列） |
 | 4 | 22（2x2） |
 | 其它 | 报错，要求 `--layout` 显式指定 |
@@ -326,6 +330,7 @@ hopen-once.sh -l 22 codex codex pi claude A B
 
 | layout | 顺序 |
 |---|---|
+| 11  | left → right |
 | 12  | left → right-top → right-bottom |
 | 21  | left-top → left-bottom → right |
 | 13  | left → right-top → right-mid → right-bottom |

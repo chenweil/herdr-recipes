@@ -7,7 +7,7 @@
 # Patterns this repo manages (any [[keys.command]] matching these keys is
 # removed on install.sh run, before this block is inserted):
 #   prefix+1..6                    (pane number switching)
-#   prefix+(alt|ctrl)+1..6         (hopen layouts)
+#   prefix+(alt|ctrl)+1..7         (hopen layouts)
 #
 # The `prefix = "..."` setting is NOT managed here — install.sh bootstraps a
 # default prefix key only when [keys] has none. Change prefix by editing
@@ -73,6 +73,11 @@ key = "prefix+alt+6"
 command = "bash ~/.config/herdr/scripts/hopen.sh 111"
 description = "hopen 111 — [A][B][C]"
 
+[[keys.command]]
+key = "prefix+alt+7"
+command = "bash ~/.config/herdr/scripts/hopen.sh 11"
+description = "hopen 11 — [A][B] side by side"
+
 # ── hopen: bare layouts (no auto-start agents) ───────────────────────
 # Same codes; panes stay as clean shells. Pair with the "with agents"
 # pair above: alt = with, ctrl = bare.
@@ -105,3 +110,8 @@ description = "hopen 31 (bare) — [A/B/C][D]"
 key = "prefix+ctrl+6"
 command = "bash ~/.config/herdr/scripts/hopen.sh 111 --no-agents"
 description = "hopen 111 (bare) — [A][B][C]"
+
+[[keys.command]]
+key = "prefix+ctrl+7"
+command = "bash ~/.config/herdr/scripts/hopen.sh 11 --no-agents"
+description = "hopen 11 (bare) — [A][B] side by side"

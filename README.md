@@ -6,7 +6,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 
 | File | Purpose |
 |---|---|
-| `scripts/hopen.sh` | Open a numbered-pane layout (`12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
+| `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/herdr-pane-switch.sh` | Same as above, bash + python helper for machines without standalone python |
@@ -23,11 +23,11 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 Every script accepts `-v`, `-V`, or `--version`:
 
 ```bash
-./install.sh --version                  # herdr-recipes 0.3.0
-scripts/hopen.sh -v                     # hopen 0.3.0
-scripts/hopen-once.sh -v                # hopen-once 0.3.0
-scripts/herdr-pane-switch.sh -v         # herdr-pane-switch 0.3.0
-scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.3.0
+./install.sh --version                  # herdr-recipes 0.4.0
+scripts/hopen.sh -v                     # hopen 0.4.0
+scripts/hopen-once.sh -v                # hopen-once 0.4.0
+scripts/herdr-pane-switch.sh -v         # herdr-pane-switch 0.4.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.4.0
 ```
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
@@ -38,17 +38,36 @@ reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release no
 | Chord | Action |
 |---|---|
 | `prefix 1..6` | Switch to pane N in active workspace |
-| `prefix alt 1..6` | Open hopen layout (auto-start agents) — `1=12, 2=21, 3=22, 4=13, 5=31, 6=111` |
-| `prefix ctrl 1..6` | Open hopen layout (bare panes, no agents) — same codes |
+| `prefix alt 1..7` | Open hopen layout (auto-start agents) — `1=12, 2=21, 3=22, 4=13, 5=31, 6=111, 7=11` |
+| `prefix ctrl 1..7` | Open hopen layout (bare panes, no agents) — same codes |
 
-See `scripts/README.md` for layout code → visual layout mapping.
+## Layouts
+
+Codes read as "left column + right column":
+
+| Code | Panes | Visual | Position names |
+|---|---|---|---|
+| `11` | 2 | `[A][B]` | left / right |
+| `12` | 3 | `[A][B/C]` | left / right-top / right-bottom |
+| `21` | 3 | `[A/B][C]` | left-top / left-bottom / right |
+| `111` | 3 | `[A][B][C]` | left / middle / right |
+| `13` | 4 | `[A][B/C/D]` | left / right-top / right-mid / right-bottom |
+| `31` | 4 | `[A/B/C][D]` | left-top / left-mid / left-bottom / right |
+| `22` | 4 | `[A/B][C/D]` | left-top / right-top / left-bottom / right-bottom |
+
+Position names are what you use in `hopen-agents.conf` section headers and what
+unnamed panes fall back to as their label.
+
+See `scripts/README.md` for the full mapping and creation-order caveats
+(`21`, `31`, `22` create panes in a different order than they appear).
 
 ## Ad-hoc layout via command line (`hopen-once.sh`)
 
 If the chord-based flow is hard to remember, run `hopen-once.sh` directly from any shell:
 
 ```bash
-# Auto-pick layout from N kinds: 3 → 12 (left + right column), 4 → 22 (2x2)
+# Auto-pick layout from N kinds: 2 → 11 (side by side), 3 → 12 (left + right column), 4 → 22 (2x2)
+hopen-once.sh codex pi                      # 2 panes, layout 11
 hopen-once.sh codex codex pi                # 3 panes, layout 12
 hopen-once.sh codex codex codex claude      # 4 panes, layout 22
 
@@ -57,6 +76,7 @@ hopen-once.sh op cd pi                       # 3 panes, layout 12
 
 # Explicit layout when auto-pick doesn't fit
 hopen-once.sh -l 13 codex codex codex pi     # 4 panes, layout 13
+hopen-once.sh -l 11 codex pi                 # 2 panes, left/right split
 
 # Repeat the same kind N times with `K:N` (saves typing `-k` N times)
 hopen-once.sh -l 22 -k codex:4               # 4 panes, all codex
@@ -121,7 +141,7 @@ cd ~/playground/herdr-recipes
 
 1. Symlinks `~/.config/herdr/scripts/` → `<repo>/scripts/`. If a `scripts/` directory already exists, it's renamed to `scripts.bak.<timestamp>` first.
 2. Removes any pre-existing managed block (delimited by `# >>> herdr-recipes managed: begin >>>` / `# <<< ... end <<<`) from `~/.config/herdr/config.toml`.
-3. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..6`). This makes upgrading from a manual setup clean.
+3. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..7`). This makes upgrading from a manual setup clean.
 4. Bootstraps `prefix = "cmd+b"` inside the `[keys]` section if no `prefix =` line is already set. Override the default via `PREFIX_DEFAULT=ctrl+b ./install.sh`.
 5. Inserts the managed block (the contents of `config/keys.toml`) inside the `[keys]` section, immediately before the next top-level section (`[experimental]`, `[ui]`, `[theme]`, …).
 6. Runs `herdr config check`, then `herdr server reload-config`.
