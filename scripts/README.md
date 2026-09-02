@@ -310,12 +310,26 @@ hopen-once.sh -l 22 -k codex:2 -k pi:2 -N codex-A -N codex-B -N pi-A -N pi-B
 ```bash
 hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
 # KINDS=[pi pi codex], NAMES=[pi-top pi-bot cd-right]
+# → pi-top = 视觉位 1 (left-top)，pi-bot = 2 (left-bottom)，cd-right = 3 (right)
 
 hopen-once.sh -l 22 -k codex:4 A B C D
 # KINDS=[codex×4], NAMES=[A B C D]
 
 hopen-once.sh -l 22 codex codex pi claude A B
-# KINDS=[codex codex pi claude], NAMES=[A B]，剩 2 个 pane 用位置名兜底
+# KINDS=[codex codex pi claude], NAMES=[A B]
+# → A = 视觉位 1 (left-top)，B = 2 (right-top)
+# → 视觉位 3、4 没给名字，回落成 left-bottom / right-bottom
+```
+
+`NAMES[i]` 对应第 `i+1` 个**视觉位**，不是 pane ID 顺序。用 `herdr pane list`
+核对时注意它按**创建顺序**返回，而 21/31/22 的创建顺序跟视觉顺序不一致，
+按行读输出很容易误以为映射错了。上面第三例的实测输出：
+
+```
+w4Y:p1  label=A              ← left-top
+w4Y:p4  label=left-bottom    ← 兜底（p4 是最后创建的，但在左下）
+w4Y:p2  label=B              ← right-top
+w4Y:p3  label=right-bottom   ← 兜底
 ```
 
 **缺省行为：** 不填 / 填空串 → 回退到位置名本身（left / left-top / right-bottom

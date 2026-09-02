@@ -111,7 +111,12 @@ hopen-once.sh -l 22 \
 hopen-once.sh -l 22 -k codex:4 -N "a,b,c,d"
 
 # Positional overflow: KINDS past max_panes go into NAMES (visual order)
+# NAMES[i] lands on the (i+1)-th visual position, not the i-th pane ID.
 hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
+#   pi-top -> visual 1 (left-top), pi-bot -> 2 (left-bottom), cd-right -> 3 (right)
+hopen-once.sh -l 22 codex codex pi claude A B
+#   A -> visual 1 (left-top), B -> 2 (right-top)
+#   visual 3 and 4 get no name, so they fall back to left-bottom / right-bottom
 
 # Bare workspace, no agents (also useful for jumping to a fresh layout)
 hopen-once.sh -n -l 22

@@ -49,8 +49,13 @@
 #
 # 位置参数溢出语法：KINDS[] 超过 layout pane 数时，溢出部分 prepend 到 NAMES，
 # 跟在 KINDS 后面追加的位置参数当 pane name（按视觉顺序），不用 -N。
+# NAMES[i] 对应第 i+1 个视觉位，不是 pane ID 顺序——21/31/22 的创建顺序跟视觉
+# 顺序不一致，用 `herdr pane list` 核对时注意它按创建顺序返回。
 #   hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
-#   hopen-once.sh -l 22 codex codex pi claude A B    # 第 3、4 pane 用位置名兜底
+#     → pi-top = 视觉位 1 (left-top)，pi-bot = 2 (left-bottom)，cd-right = 3 (right)
+#   hopen-once.sh -l 22 codex codex pi claude A B
+#     → A = 视觉位 1 (left-top)，B = 2 (right-top)
+#     → 视觉位 3、4 没给名字，回落成 left-bottom / right-bottom
 #
 # Examples:
 #   hopen-once.sh codex pi                          # 2 panes (layout 11)
@@ -99,7 +104,7 @@ NAMES=()        # pane label 列表，跟 KINDS[] 同索引（视觉顺序）
 PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
 print_help() {
-  sed -n '2,66p' "${BASH_SOURCE[0]}"
+  sed -n '2,71p' "${BASH_SOURCE[0]}"
 }
 
 # 把 --path 解析成绝对路径：展开 ~，相对路径相对当前 $PWD 解析，最后 cd && pwd 规范化。
