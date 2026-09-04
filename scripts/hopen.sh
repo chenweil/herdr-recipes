@@ -15,8 +15,8 @@
 #   111  三列各一        [A][B][C]
 #
 # Agent 启动：hopen.sh 跑完布局后读 hopen-agents.conf，按 section 启动 agent。
-#   conf 缺失 / section 缺失 / kind 写错 / pane 没在 conf 里 → 跳过；
-#   agent 启动失败会显示诊断，但不影响布局和其它 pane
+#   conf 缺失 / section 缺失 / pane 没在 conf 里 → 跳过；
+#   kind、agent 启动或 prompt 失败会显示诊断，但不影响布局和其它 pane
 #   详细 conf 格式见同目录 README.md。
 #
 # 设计原则：
@@ -47,6 +47,10 @@ HOPEN_CONF="${HOPEN_CONF:-$HOME/.config/herdr/scripts/hopen-agents.conf}"
 # hopen() 内部据此决定是否进入派位循环。设为 1 = 只开布局。
 # 保留为全局默认值；hopen() 函数内用同名 local 覆盖。hopen-once.sh 不读它。
 NO_AGENTS=0
+
+# Dispatch 状态由 _start_agent 累积，布局成功后由入口统一发送一次通知。
+HOPEN_DISPATCH_FAILED=0
+HOPEN_DISPATCH_FAILURES=()
 
 # _h_build_layout / hopen() 的共享状态：ws 创建 + 所有 pane split 完后填充。
 # 调用 _h_build_layout 后读 HOPEN_WS_ID 和 HOPEN_CREATED_PANES 即可拿到结果。
@@ -327,33 +331,100 @@ _resolve_kind() {
     op) echo "opencode" ;;
     cc) echo "claude"   ;;
     cd) echo "codex"    ;;
-    pi) echo "pi"       ;;
     *)  echo "$1"       ;;
   esac
+}
+
+# Build a Herdr-safe, readable name from the workspace and its visual position.
+# Keep the full name when possible; otherwise retain a readable prefix and add
+# a short checksum so long workspace IDs still produce distinct names.
+_sanitize_name_part() {
+  local value="$1" safe
+  safe=$(printf '%s' "$value" | tr '[:upper:]' '[:lower:]' \
+    | sed -E 's/[^a-z0-9_-]+/-/g; s/^-+//; s/-+$//')
+  [ -n "$safe" ] || safe="pane"
+  printf '%s' "$safe"
+}
+
+_short_name_hash() {
+  printf '%s' "$1" | cksum | awk '{print $1}' | cut -c1-6
+}
+
+_agent_name() {
+  local workspace_id="$1" position="$2"
+  local workspace_part position_part normalized_workspace full suffix prefix_length
+  workspace_part=$(_sanitize_name_part "$workspace_id")
+  normalized_workspace=$(printf '%s' "$workspace_id" | tr '[:upper:]' '[:lower:]')
+  if [ "$workspace_id" != "$normalized_workspace" ] \
+    || [ "$workspace_part" != "$normalized_workspace" ]; then
+    workspace_part="${workspace_part}-$(_short_name_hash "$workspace_id")"
+  fi
+  position_part=$(_sanitize_name_part "$position")
+  full="hopen-${workspace_part}-${position_part}"
+
+  if [ "${#full}" -le 32 ]; then
+    printf '%s' "$full"
+    return
+  fi
+
+  suffix="-$(_short_name_hash "$full")"
+  prefix_length=$((32 - ${#suffix}))
+  printf '%s%s' "${full:0:$prefix_length}" "$suffix"
+}
+
+# Dispatch 状态由 _start_agent 累积，布局成功后由入口统一发送一次通知。
+_reset_dispatch_state() {
+  HOPEN_DISPATCH_FAILED=0
+  HOPEN_DISPATCH_FAILURES=()
+}
+
+_record_dispatch_failure() {
+  HOPEN_DISPATCH_FAILED=1
+  HOPEN_DISPATCH_FAILURES+=("$1")
+}
+
+_notify_dispatch() {
+  local title body sound failure notification_out
+  if [ "$HOPEN_DISPATCH_FAILED" -eq 0 ]; then
+    title="Recipe ready"
+    body="Recipe setup and Dispatch succeeded."
+    sound="done"
+  else
+    title="Recipe dispatch failed"
+    body="Recipe setup completed with Dispatch failures:"
+    for failure in "${HOPEN_DISPATCH_FAILURES[@]}"; do
+      body+=$'\n- '"$failure"
+    done
+    sound="request"
+  fi
+
+  if ! notification_out=$(herdr notification show "$title" --body "$body" --sound "$sound" 2>&1); then
+    [ -z "$notification_out" ] || printf '%s\n' "$notification_out" >&2
+    echo "[hopen] notification failed (Dispatch result was not changed)" >&2
+  fi
 }
 
 # 启动 agent。失败不阻断脚本，pane 留空；诊断信息仍写入 stderr。
 # 参数：agent_name pane_id kind [prompt]
 _start_agent() {
-  local name="$1" pane="$2" raw_kind="$3" prompt="${4:-}" start_out kind
+  local name="$1" pane="$2" raw_kind="$3" prompt="${4:-}" start_out kind prompt_out
   kind=$(_resolve_kind "$raw_kind")
 
-  # kind 本机不存在 → 跳过
-  if ! command -v "$kind" >/dev/null 2>&1; then
-    echo "[hopen] 跳过 $name: '$kind' 不在 PATH" >&2
-    return 0
-  fi
-
   if ! start_out=$(herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout 60000 2>&1); then
-    printf '%s\n' "$start_out" >&2
+    [ -z "$start_out" ] || printf '%s\n' "$start_out" >&2
     echo "[hopen] 跳过 $name: '$kind' 启动失败（herdr agent start 返回非 0）" >&2
+    _record_dispatch_failure "agent start failed: $name ($kind)"
     return 0
   fi
 
   echo "[hopen] $name → $kind on $pane" >&2
 
   if [ -n "$prompt" ]; then
-    herdr agent prompt "$name" "$prompt" >/dev/null 2>&1 || true
+    if ! prompt_out=$(herdr agent prompt "$name" "$prompt" 2>&1); then
+      [ -z "$prompt_out" ] || printf '%s\n' "$prompt_out" >&2
+      echo "[hopen] $name: 初始 prompt 提交失败" >&2
+      _record_dispatch_failure "initial prompt failed: $name ($kind)"
+    fi
   fi
 }
 
@@ -408,10 +479,12 @@ hopen() {
   local ws_id="${HOPEN_WS_ID}"
   local -a created=("${HOPEN_CREATED_PANES[@]}")
 
+  _reset_dispatch_state
+
   # 跳到新 ws
   herdr workspace focus "$ws_id" >/dev/null 2>&1 || true
 
-  # 按 conf 启动 agent（layout 段缺失 / pane 缺失 / kind 缺失 / kind 写错 全跳）
+  # 按 conf 启动 agent（layout/pane/kind 段缺失跳过；Herdr 拒绝则记录并继续）
   if [ "$no_agents" -eq 0 ] && [ -f "$HOPEN_CONF" ]; then
     local i pos kind prompt
     for i in "${!created[@]}"; do
@@ -422,12 +495,16 @@ hopen() {
         # pane 没在 conf 里配 → 跳过，pane 留干净 shell
         continue
       fi
-      _start_agent "hopen-$code-$pos" "${created[$i]}" "$kind" "$prompt"
+      _start_agent "$(_agent_name "$ws_id" "$pos")" "${created[$i]}" "$kind" "$prompt"
     done
   fi
 
   # 输出契约：诊断日志写 stderr；stdout 只保留这一条主结果，供调用方读取。
   # 调用方可从 ws=... panes=... 取得 workspace 和完整 pane 列表。
+  if [ "$no_agents" -eq 0 ]; then
+    _notify_dispatch
+  fi
+
   echo "ws=$ws_id panes=${created[*]}"
   return 0
 }

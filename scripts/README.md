@@ -148,7 +148,9 @@ kind = "hermes"
 claude codex pi opencode hermes droid qodercli
 ```
 
-其它 kind 在本机没装时，`hopen.sh` 会提示不在 PATH 并跳过该 pane，其它正常。
+脚本不再用 `command -v` 检查 executable；canonical kind 原样交给 Herdr。
+本机未安装、未知或不可用的 kind 会保留 Herdr 的真实诊断，该 pane 留作 shell，
+其它 pane 继续，最终 Dispatch 以失败通知汇总。
 
 kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH 可执行文件。
 必须使用 `herdr agent start --help` 列出的值；`command -v` 通过只说明本机有同名
@@ -161,10 +163,11 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
    `ws=... panes=...` 是 stdout 上唯一的主结果，供脚本调用方读取。
 3. agent 启动失败不会回滚布局；失败 pane 保留为干净 shell，其它 pane 继续处理。
    Herdr 返回的真实错误会显示在 stderr，不会被静默吞掉。
-4. kind 命令不在 PATH 时直接跳过；命令虽然存在但 Herdr 不支持时，会显示 Herdr
-   的拒绝原因后跳过。
-5. 配置了 `prompt` 时，agent 启动后再发送 prompt；prompt 失败不影响已经启动的
-   agent。
+4. kind 不在本机 PATH 或 Herdr 不支持时，都由 Herdr 给出诊断后记录为 Dispatch 失败。
+5. 配置了 `prompt` 时，agent 启动后直接发送 prompt，不等待 agent 工作完成；prompt
+   失败会显示诊断、保留已经启动的 agent，并记录为 Dispatch 失败。
+6. 所有 pane 尝试完成后只发一次通知：全部成功为 `Recipe ready` + `done`，任一
+   start/prompt 失败为 `Recipe dispatch failed` + `request`。
 
 ### 容错策略
 
@@ -173,9 +176,9 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
 | conf 文件不存在              | 全部 pane 留干净 shell        |
 | `[layout.XX]` 段缺失         | 该 layout 全留干净 shell      |
 | `[layout.XX.panes.Y]` 缺失   | 该 pane 留干净 shell          |
-| kind 命令不在 PATH           | 提示并跳过该 pane             |
-| Herdr 拒绝 kind / 启动失败   | 显示真实错误并跳过该 pane     |
-| prompt 写错 / agent 拒收     | 跳过 prompt，agent 仍启动     |
+| kind 不在 PATH / Herdr 拒绝  | 显示真实错误，pane 留 shell，记录 Dispatch 失败 |
+| agent 启动失败               | 显示真实错误，继续其它 pane，记录 Dispatch 失败 |
+| prompt 写错 / agent 拒收     | 显示真实错误，agent 保留，记录 Dispatch 失败 |
 
 设计动机：你卸载 agent 或换工具链时，hopen 快捷键不会全废。
 
@@ -189,7 +192,6 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
 | `op` | `opencode` | |
 | `cc` | `claude` | 不是 `claudecode` —— herdr 的 kind 是 `claude` |
 | `cd` | `codex` | |
-| `pi` | `pi` | 等价于原名；保留是为了对称 |
 
 未列出的别名（如 `claude`、`hermes`、`qodercli`）原样传入 herdr。未来 herdr
 新增 kind 时不需要改 `_resolve_kind`，直接用全名即可。

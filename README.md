@@ -69,7 +69,7 @@ hopen-once.sh codex pi                      # 2 panes, layout 11
 hopen-once.sh codex codex pi                # 3 panes, layout 12
 hopen-once.sh codex codex codex claude      # 4 panes, layout 22
 
-# Short aliases (resolved by _resolve_kind): op/cc/cd/pi
+# Short aliases (resolved by _resolve_kind): op/cc/cd
 hopen-once.sh op cd pi                       # 3 panes, layout 12
 
 # Explicit layout when auto-pick doesn't fit

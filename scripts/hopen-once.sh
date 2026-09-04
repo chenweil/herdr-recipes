@@ -26,7 +26,7 @@
 #
 # Kinds are placed in panes in visual reading order
 # (left-to-right, top-to-bottom). Use _resolve_kind aliases where helpful:
-#   op → opencode, cc → claude, cd → codex, pi → pi.
+#   op → opencode, cc → claude, cd → codex.
 #
 # Per-pane prompts: --prompt P is matched to kinds by index. Missing
 # entries default to empty. Use --kind and --prompt alternately for clarity:
@@ -283,6 +283,8 @@ _h_build_layout "$LAYOUT" "" "$RESOLVED_PATH" "" "$pane_names" || { echo "hopen-
 ws_id="${HOPEN_WS_ID}"
 created=( "${HOPEN_CREATED_PANES[@]}" )
 
+_reset_dispatch_state
+
 # --- Dispatch agents in row-major visual order ---
 #
 # `_position_for <layout> <created_idx>` returns the position name at that
@@ -307,15 +309,20 @@ if [ "$NO_AGENTS" -eq 0 ] && [ "${#KINDS[@]}" -gt 0 ]; then
     done
     if [ -z "$target_pane" ]; then
       echo "[hopen-once] 跳过 $user_kind: 找不到对应 pane ($pos)" >&2
+      _record_dispatch_failure "pane mapping failed: $user_kind ($pos)"
       i=$((i+1)); continue
     fi
 
-    _start_agent "hopen-once-${LAYOUT}-${pos}" "$target_pane" "$user_kind" "$user_prompt"
+    _start_agent "$(_agent_name "$ws_id" "$pos")" "$target_pane" "$user_kind" "$user_prompt"
     i=$((i+1))
   done < <(_h_row_major "$LAYOUT")
 fi
 
-# --- Focus new workspace + emit result ---
+# --- Dispatch notification, then focus new workspace + emit result ---
+if [ "$NO_AGENTS" -eq 0 ]; then
+  _notify_dispatch
+fi
+
 herdr workspace focus "$ws_id" >/dev/null 2>&1 || true
 
 echo "ws=$ws_id panes=${created[*]}"

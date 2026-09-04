@@ -3,7 +3,7 @@
 > 调研日期：2026-09-03
 > 验证环境：Herdr 0.8.2，macOS
 > 方法：官方文档、本机 CLI/schema、仓库源码和社区项目交叉核验
-> 状态：事实已复核；产品边界已经讨论确认；issue #2 已完成实现、focused tests 和真实 Herdr smoke
+> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3 已完成实现、focused tests 和真实 Herdr smoke
 
 ## 1. 资料与证据等级
 
@@ -135,17 +135,20 @@ executable 存在。
 3. Python 切换器现在优先使用注入的 `HERDR_SOCKET_PATH`，并对 CLI、socket 和 focus
    响应错误给出可见的非零结果。
 
+### Issue #3 已实施
+
+1. `hopen.sh` 和 `hopen-once.sh` 现在用 workspace ID 和视觉位置生成符合 Herdr
+   约束的唯一 agent name；过长名称保留可读前缀并附短 hash。
+2. canonical kind 原样交给 `herdr agent start --kind`，只保留 `op | cc | cd` 三个
+   便利 alias；不再用 `command -v` 预检 executable。
+3. 所有 agent start 和初始 prompt 都会尝试；失败诊断写入 stderr，成功布局仍返回
+   `ws=<id> panes=<ids...>`，并只发送一次 `Recipe ready` 或失败通知。
+
 ### 后续待处理问题
-4. `hopen.sh` 和 `hopen-once.sh` 都使用固定 agent name。重复打开相同布局时会与仍
-   存活的同名 agent 冲突。
-5. 初始 prompt 的 stderr 和非零退出被吞掉。键位后台运行时，用户无法知道 prompt
-   是否提交成功。
-6. `_start_agent` 的 `command -v "$kind"` 会将 kind 当作 executable；`cursor` 已证明
-   这会在可启动 agent 上产生假阴性。
-7. 文档和配置只列出少量别名，但这不限制 canonical full kind：`_resolve_kind` 的默认
-   分支本来就会原样透传。需要保留的别名只有 `op | cc | cd`，`pi -> pi` 是空操作。
-8. 当前没有 Herdr 最低版本门禁，旧 CLI contract 可能再次静默进入脚本。
-9. installer 会原地更新用户的 `config.toml`，但不会创建该文件的 `.bak`；这是需要
+1. 文档和配置只列出少量别名，但这不限制 canonical full kind：`_resolve_kind` 的默认
+   分支本来就会原样透传。需要保留的便利别名只有 `op | cc | cd`。
+2. 当前没有 Herdr 最低版本门禁，旧 CLI contract 可能再次静默进入脚本。
+3. installer 会原地更新用户的 `config.toml`，但不会创建该文件的 `.bak`；这是需要
    明确的备份风险，不应写成无条件的实现优点。
 
 ## 4. 已确认的产品边界
@@ -172,9 +175,9 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 - Python 切换器读取 `HERDR_SOCKET_PATH`。
 - `prefix+N` 使用视觉阅读顺序：从上到下、从左到右。
 
-### Agent 启动与 prompt
+### Agent Dispatch（issue #3）
 
-- 删除 `command -v "$kind"` 门禁，以 `herdr agent start` 为运行时唯一权威。
+- 已删除 `command -v "$kind"` 门禁，以 `herdr agent start` 为运行时唯一权威。
 - canonical full kind 与 Herdr 保持一致；保留 `op | cc | cd` 三个便利别名。
 - agent name 包含安全化 workspace ID 和 position；超长时截断并加入短 hash。
 - prompt 成功提交后立即返回，不等待 agent 工作完成。
@@ -210,7 +213,7 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 
 1. 固化本研究记录、领域词汇和 Recipe/Workflow 边界 ADR。
 2. 删除旧切换器，实现 socket/caller context 与视觉顺序修复。已完成。
-3. 修复 agent name、启动权威、prompt 错误和汇总通知。
+3. 修复 agent name、启动权威、prompt 错误和汇总通知。已完成。
 4. 加入版本门禁、agent catalog 与 install audit。
 5. 增加外部 workflow 组合示例，并完成 focused tests 与真实 Herdr smoke。
 
@@ -222,7 +225,17 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 - 创建的 `22` 布局 `w56` 按真实 rectangle 排序为
   `w56:p1 → w56:p2 → w56:p4 → w56:p3`；在 `w56:p1` 运行索引 `3` 返回成功，随后
   `focused_pane_id` 为 `w56:p4`。
-- smoke workspace 已关闭，原 workspace `w51` 和 `focused_pane_id=w51:p6` 已恢复。
+- smoke workspace 已关闭；后续 issue #3 smoke 清理完成后，原 workspace `w51` 与
+  `focused_pane_id=w51:p2` 已恢复。
+
+### Issue #3 真实 smoke（2026-09-04）
+
+- 同一 `11` Recipe 连续创建 `w57` 和 `w58`，四个 live Pi agent 名称分别为
+  `hopen-w57-left/right` 与 `hopen-w58-left/right`，均无碰撞并进入 idle。
+- 使用 unknown kind 和 `pi` 创建 `w59` 时，Herdr 的 `unsupported interactive agent kind`
+  诊断写入 stderr，命令仍返回 0；`w59:p1` 保留为 shell，`w59:p2` 的
+  `hopen-w59-right` Pi agent 成功启动并 idle，证明后续 pane 仍会尝试。
+- `w57`、`w58`、`w59` 已关闭，原 workspace `w51` 与 `focused_pane_id=w51:p2` 已恢复。
 
 生产实现必须分别验证脚本静态检查、fixture/mock contract，以及真实 Herdr pane 几何、
 重复布局、部分 agent 失败和通知行为。仅有 shell syntax 通过不能证明运行时契约成立。
