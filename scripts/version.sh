@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# version.sh — 版本号的唯一读取入口。被 hopen.sh / herdr-pane-switch.sh source。
+# version.sh — 版本号的唯一读取入口。被 hopen.sh / hopen-once.sh / install.sh source。
 #
 # 版本号存在仓库根的 VERSION 文件里（单一事实来源），不硬编码在脚本里，
 # 这样发版只改一处。scripts/ 在安装后是指向仓库的 symlink，

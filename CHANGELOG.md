@@ -7,6 +7,14 @@
 
 版本号存在仓库根的 `VERSION` 文件里，所有脚本通过 `-v` / `-V` / `--version` 读同一份。
 
+## [Unreleased]
+
+### 变更
+
+- 数字 pane 切换现在读取当前布局的 rectangle，按从上到下、从左到右的视觉顺序工作，
+  并支持注入的 `HERDR_SOCKET_PATH`。
+- 移除废弃的 Shell 数字切换器，保留 Python 作为唯一实现。
+
 ## [0.4.0] - 02-09-2026
 
 ### 新增
@@ -52,7 +60,7 @@
   git repo 用当前分支名，非 repo 用 `basename`。撞名时加 `+a` / `+b` 后缀，
   26 个用完退化成时间戳。
 - **版本号**。`VERSION` 文件 + `scripts/version.sh` 作为单一读取入口。
-  `hopen.sh`、`hopen-once.sh`、`herdr-pane-switch.sh`、`herdr-pane-switch.py`、
+  `hopen.sh`、`hopen-once.sh`、`herdr-pane-switch.py`、
   `install.sh` 都支持 `-v` / `-V` / `--version`。
 - 本 CHANGELOG。
 
@@ -90,7 +98,7 @@
   可选带 prompt。conf 缺失 / 段缺失 / kind 没装都只跳过对应 pane，不影响布局。
 - **Kind 别名**：`op` → `opencode`、`cc` → `claude`、`cd` → `codex`、`pi` → `pi`；
   未列出的原样透传，herdr 新增 kind 时不用改代码。
-- **`herdr-pane-switch.py` / `.sh`**：切到当前 workspace 的第 N 个 pane。
+- **数字 pane 切换器**：切到当前 workspace 的第 N 个 pane。
 - **`config/keys.toml`** + **`install.sh`**：一条命令装好键位。
   `prefix 1..6` 切 pane，`prefix alt 1..6` 开布局并起 agent，
   `prefix ctrl 1..6` 开裸布局。install 幂等，用 marker 块管理 `config.toml`，

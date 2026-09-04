@@ -5,13 +5,12 @@
 ## version.sh — 版本号读取
 
 版本号存在仓库根的 `VERSION` 文件，`version.sh` 是唯一读取入口，
-被 `hopen.sh` / `hopen-once.sh` / `herdr-pane-switch.sh` / `install.sh` source；
+被 `hopen.sh` / `hopen-once.sh` / `install.sh` source；
 `herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
 hopen.sh -v                 # hopen 0.4.0
 hopen-once.sh --version     # hopen-once 0.4.0
-herdr-pane-switch.sh -V     # herdr-pane-switch 0.4.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
@@ -19,6 +18,14 @@ herdr-pane-switch.sh -V     # herdr-pane-switch 0.4.0
 `~/.config/herdr/VERSION`（不存在）。读不到时输出 `unknown` 而不报错。
 
 每个版本改了什么看仓库根的 [CHANGELOG.md](../CHANGELOG.md)。
+
+## herdr-pane-switch.py — 按视觉顺序切换 pane
+
+脚本调用 `herdr pane layout --current` 获取调用方所在布局，按 rectangle 的
+`(y, x)` 从上到下、从左到右排列 pane，再通过当前 session socket 用精确的
+`pane_id` 执行 focus。优先使用 `HERDR_SOCKET_PATH`；未注入时回退到默认本地
+session socket。布局响应、focus 响应、socket 错误和越界索引都会以可见的非零
+错误返回。
 
 ## hopen.sh — 按代号开 herdr pane 布局
 
@@ -371,4 +378,3 @@ w4Y:p3  label=right-bottom   ← 兜底
 
 两者共用 `_h_build_layout / _position_for / _start_agent / _resolve_kind`，
 所以别名 (`op`/`cc`/`cd`/`pi`) 和 layout 表都互通。
-

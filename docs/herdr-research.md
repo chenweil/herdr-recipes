@@ -3,7 +3,7 @@
 > 调研日期：2026-09-03
 > 验证环境：Herdr 0.8.2，macOS
 > 方法：官方文档、本机 CLI/schema、仓库源码和社区项目交叉核验
-> 状态：事实已复核；产品边界已经讨论确认；生产代码尚未实施
+> 状态：事实已复核；产品边界已经讨论确认；issue #2 已完成实现、focused tests 和真实 Herdr smoke
 
 ## 1. 资料与证据等级
 
@@ -125,15 +125,17 @@ executable 存在。
 - split 失败会回滚新建 workspace；单个 agent 失败不会破坏成功的布局。
 - installer 用 marker 管理自己的 keybinding block，并备份被替换的 scripts 目录。
 
-### 已确认的问题
+### Issue #2 已实施
 
-1. `herdr-pane-switch.sh` 使用多项旧 CLI/JSON contract：不存在的 `session current`、
-   无效的 `--json`、旧字段名和旧的 pane focus 调用。当前键位实际使用 Python 版本，
-   Shell 版本自身也依赖 Python，继续维护没有价值。
-2. `herdr-pane-switch.py` 按 `pane_id` 字符串排序。该顺序既不是视觉顺序，也不保证是
-   创建顺序；应改用 `pane layout --current` 的 rectangle，按 `(y, x)` 排序。
-3. Python 切换器硬编码默认 socket，忽略已注入的 `HERDR_SOCKET_PATH`，影响 named
-   session、自定义 socket 和其他运行环境。
+1. 旧的 Shell 切换器使用多项旧 CLI/JSON contract：不存在的 `session current`、无效的
+   `--json`、旧字段名和旧的 pane focus 调用。当前键位实际使用 Python 版本，Shell
+   版本自身也依赖 Python，继续维护没有价值；本 issue 已将其移除。
+2. `herdr-pane-switch.py` 现在调用 `pane layout --current`，按 rectangle 的 `(y, x)`
+   排列 pane，不再依赖 pane ID 或创建顺序。
+3. Python 切换器现在优先使用注入的 `HERDR_SOCKET_PATH`，并对 CLI、socket 和 focus
+   响应错误给出可见的非零结果。
+
+### 后续待处理问题
 4. `hopen.sh` 和 `hopen-once.sh` 都使用固定 agent name。重复打开相同布局时会与仍
    存活的同名 agent 冲突。
 5. 初始 prompt 的 stderr 和非零退出被吞掉。键位后台运行时，用户无法知道 prompt
@@ -164,7 +166,7 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 
 ## 5. 已确认的实现方向
 
-### Pane 导航
+### Pane 导航（issue #2）
 
 - 删除废弃的 Shell 切换器。
 - Python 切换器读取 `HERDR_SOCKET_PATH`。
@@ -207,10 +209,20 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 建议按以下顺序实施：
 
 1. 固化本研究记录、领域词汇和 Recipe/Workflow 边界 ADR。
-2. 删除旧切换器，实现 socket/caller context 与视觉顺序修复。
+2. 删除旧切换器，实现 socket/caller context 与视觉顺序修复。已完成。
 3. 修复 agent name、启动权威、prompt 错误和汇总通知。
 4. 加入版本门禁、agent catalog 与 install audit。
 5. 增加外部 workflow 组合示例，并完成 focused tests 与真实 Herdr smoke。
+
+### Issue #2 真实 smoke（2026-09-04）
+
+- Herdr 0.8.2 中创建的 `21` 布局 `w55` 按真实 rectangle 排序为
+  `w55:p1 → w55:p2 → w55:p3`；在 `w55:p1` 运行切换器索引 `2` 返回成功，随后
+  `pane layout` 的 `focused_pane_id` 为 `w55:p2`。
+- 创建的 `22` 布局 `w56` 按真实 rectangle 排序为
+  `w56:p1 → w56:p2 → w56:p4 → w56:p3`；在 `w56:p1` 运行索引 `3` 返回成功，随后
+  `focused_pane_id` 为 `w56:p4`。
+- smoke workspace 已关闭，原 workspace `w51` 和 `focused_pane_id=w51:p6` 已恢复。
 
 生产实现必须分别验证脚本静态检查、fixture/mock contract，以及真实 Herdr pane 几何、
 重复布局、部分 agent 失败和通知行为。仅有 shell syntax 通过不能证明运行时契约成立。

@@ -9,7 +9,6 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
-| `scripts/herdr-pane-switch.sh` | Same as above, bash + python helper for machines without standalone python |
 | `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
 | `scripts/README.md` | Detailed docs for the hopen / hopen-agents scripts |
 | `config/keys.toml` | All `[[keys.command]]` entries this repo manages |
@@ -26,7 +25,6 @@ Every script accepts `-v`, `-V`, or `--version`:
 ./install.sh --version                  # herdr-recipes 0.4.0
 scripts/hopen.sh -v                     # hopen 0.4.0
 scripts/hopen-once.sh -v                # hopen-once 0.4.0
-scripts/herdr-pane-switch.sh -v         # herdr-pane-switch 0.4.0
 scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.4.0
 ```
 
@@ -210,7 +208,7 @@ Comment out the corresponding `[[keys.command]]` line in `config/keys.toml`. Aft
     ├── hopen.sh
     ├── hopen-once.sh
     ├── hopen-agents.conf
-    └── herdr-pane-switch.{sh,py}
+    └── herdr-pane-switch.py
 
 ~/.config/herdr/
 ├── config.toml                  ← modified by install.sh (managed block inside [keys])
