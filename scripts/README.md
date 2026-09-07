@@ -9,8 +9,8 @@
 `herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
-hopen.sh -v                 # hopen 0.4.0
-hopen-once.sh --version     # hopen-once 0.4.0
+hopen.sh -v                 # hopen 0.5.0
+hopen-once.sh --version     # hopen-once 0.5.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用

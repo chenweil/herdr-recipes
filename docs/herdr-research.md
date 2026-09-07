@@ -114,7 +114,7 @@ executable 存在。
 
 ## 3. herdr-recipes 当前状态
 
-当前版本为 0.4.0。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
+当前版本为 0.5.0。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
 数字切换、键位配置和 installer。
 
 ### 已经成立的实现
