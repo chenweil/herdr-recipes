@@ -8,10 +8,12 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 |---|---|
 | `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
+| `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
 | `scripts/README.md` | Detailed docs for the hopen / hopen-agents scripts |
 | `config/keys.toml` | All `[[keys.command]]` entries this repo manages |
+| `config/agent-catalog.json` | Versioned supported-kind, executable, integration, and alias catalog |
 | `install.sh` | One-shot installer / upgrader / uninstaller |
 | `hopen-once.sh` | Ad-hoc layout + per-pane kinds via command line (no chord, no conf) |
 | `VERSION` | Single source of truth for the version number |
@@ -132,7 +134,9 @@ Kinds are placed in panes in visual reading order (left-to-right, top-to-bottom)
 
 ## Install (one-time, per machine)
 
-Prerequisites: `herdr` already installed, `python3` in PATH (used by `herdr-pane-switch.py` and `install.sh`).
+Prerequisites: Herdr `0.8.2+` already installed, `python3` in PATH (used by the pane switcher,
+agent audit, and installer). The installer reports optional executable/integration gaps but
+never installs integrations.
 
 ```bash
 git clone https://github.com/chenweil/herdr-recipes.git ~/playground/herdr-recipes
@@ -148,6 +152,7 @@ cd ~/playground/herdr-recipes
 4. Bootstraps `prefix = "cmd+b"` inside the `[keys]` section if no `prefix =` line is already set. Override the default via `PREFIX_DEFAULT=ctrl+b ./install.sh`.
 5. Inserts the managed block (the contents of `config/keys.toml`) inside the `[keys]` section, immediately before the next top-level section (`[experimental]`, `[ui]`, `[theme]`, …).
 6. Runs `herdr config check`, then `herdr server reload-config`.
+7. Runs the read-only agent catalog audit. Missing optional executables or integrations are warnings.
 
 After install, the new key bindings are live in your running herdr session.
 
@@ -203,8 +208,10 @@ Comment out the corresponding `[[keys.command]]` line in `config/keys.toml`. Aft
 ├── CHANGELOG.md
 ├── install.sh
 ├── config/keys.toml
+├── config/agent-catalog.json
 └── scripts/
     ├── version.sh                ← sourced by the shell scripts for -v
+    ├── agent-audit.py
     ├── hopen.sh
     ├── hopen-once.sh
     ├── hopen-agents.conf

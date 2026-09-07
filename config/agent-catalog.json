@@ -1,0 +1,33 @@
+{
+  "catalog_version": 1,
+  "min_herdr_version": "0.8.2",
+  "aliases": {
+    "op": "opencode",
+    "cc": "claude",
+    "cd": "codex"
+  },
+  "kinds": [
+    {"kind": "pi", "executables": ["pi"], "integration_targets": ["pi"]},
+    {"kind": "claude", "executables": ["claude"], "integration_targets": ["claude"]},
+    {"kind": "codex", "executables": ["codex"], "integration_targets": ["codex"]},
+    {"kind": "gemini", "executables": ["gemini"], "integration_targets": []},
+    {"kind": "cursor", "executables": ["cursor-agent", "cursor"], "integration_targets": ["cursor"]},
+    {"kind": "devin", "executables": ["devin"], "integration_targets": ["devin"]},
+    {"kind": "agy", "executables": ["antigravity", "antigravity-cli"], "integration_targets": ["antigravity-cli"]},
+    {"kind": "cline", "executables": ["cline"], "integration_targets": []},
+    {"kind": "omp", "executables": ["omp"], "integration_targets": ["omp"]},
+    {"kind": "mastracode", "executables": ["mastracode"], "integration_targets": ["mastracode"]},
+    {"kind": "opencode", "executables": ["opencode"], "integration_targets": ["opencode"]},
+    {"kind": "copilot", "executables": ["copilot"], "integration_targets": ["copilot"]},
+    {"kind": "kimi", "executables": ["kimi"], "integration_targets": ["kimi"]},
+    {"kind": "kiro", "executables": ["kiro"], "integration_targets": []},
+    {"kind": "droid", "executables": ["droid"], "integration_targets": ["droid"]},
+    {"kind": "amp", "executables": ["amp"], "integration_targets": []},
+    {"kind": "grok", "executables": ["grok"], "integration_targets": []},
+    {"kind": "hermes", "executables": ["hermes"], "integration_targets": ["hermes"]},
+    {"kind": "kilo", "executables": ["kilo"], "integration_targets": ["kilo"]},
+    {"kind": "qodercli", "executables": ["qodercli"], "integration_targets": ["qodercli"]},
+    {"kind": "qwen", "executables": ["qwen"], "integration_targets": ["qwen"]},
+    {"kind": "maki", "executables": ["maki"], "integration_targets": []}
+  ]
+}

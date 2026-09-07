@@ -3,7 +3,7 @@
 > 调研日期：2026-09-03
 > 验证环境：Herdr 0.8.2，macOS
 > 方法：官方文档、本机 CLI/schema、仓库源码和社区项目交叉核验
-> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3 已完成实现、focused tests 和真实 Herdr smoke
+> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3/#4 已完成实现、focused tests 和真实 Herdr smoke
 
 ## 1. 资料与证据等级
 
@@ -144,6 +144,15 @@ executable 存在。
 3. 所有 agent start 和初始 prompt 都会尝试；失败诊断写入 stderr，成功布局仍返回
    `ws=<id> panes=<ids...>`，并只发送一次 `Recipe ready` 或失败通知。
 
+### Issue #4 已实施
+
+1. `config/agent-catalog.json` 记录 Herdr 0.8.2 的 22 个 start kinds、candidate
+   executables、可选 integration targets 和 repo aliases。
+2. `scripts/agent-audit.py` 先检查 Herdr 最低版本，再 best-effort 解析 help，分别报告
+   executable 与 integration 状态；help/status 不可读时只警告并继续。
+3. `install.sh` 在写入用户配置前要求 Herdr 0.8.2+，安装后执行只读 audit；catalog
+   不是 runtime allowlist，也不会执行 integration install。
+
 ### 后续待处理问题
 1. 文档和配置只列出少量别名，但这不限制 canonical full kind：`_resolve_kind` 的默认
    分支本来就会原样透传。需要保留的便利别名只有 `op | cc | cd`。
@@ -195,12 +204,12 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   `done` 仅表示通知声音选择，不改变 **Recipe Ready** 的语义，也不表示 agent lifecycle
   进入了 `done`。
 
-### 安装检查与 catalog
+### 安装检查与 catalog（issue #4）
 
-- 最低支持 Herdr 0.8.2。
-- 从当前 `agent start --help` best-effort 提取 supported kinds。
-- 仓库维护版本化 catalog，记录已知 kind、candidate executables、可选 integration
-  target 和 repo aliases。
+- 已要求最低 Herdr 0.8.2。
+- 已从当前 `agent start --help` best-effort 提取 supported kinds。
+- 已维护版本化 catalog，记录 known kind、candidate executable、可选 integration target
+  和 repo aliases。
 - 安装时扫描所有当前 supported kinds，分别显示 executable 和 integration 状态。
 - 当前 Herdr 新增但 catalog 未知的 kind 显示 `availability unknown`，仍允许原样配置和
   运行；catalog 永远不是运行时白名单。
@@ -214,7 +223,7 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 1. 固化本研究记录、领域词汇和 Recipe/Workflow 边界 ADR。
 2. 删除旧切换器，实现 socket/caller context 与视觉顺序修复。已完成。
 3. 修复 agent name、启动权威、prompt 错误和汇总通知。已完成。
-4. 加入版本门禁、agent catalog 与 install audit。
+4. 加入版本门禁、agent catalog 与 install audit。已完成。
 5. 增加外部 workflow 组合示例，并完成 focused tests 与真实 Herdr smoke。
 
 ### Issue #2 真实 smoke（2026-09-04）
@@ -236,6 +245,14 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   诊断写入 stderr，命令仍返回 0；`w59:p1` 保留为 shell，`w59:p2` 的
   `hopen-w59-right` Pi agent 成功启动并 idle，证明后续 pane 仍会尝试。
 - `w57`、`w58`、`w59` 已关闭，原 workspace `w51` 与 `focused_pane_id=w51:p2` 已恢复。
+
+### Issue #4 真实 audit（2026-09-05）
+
+- 当前 Herdr `0.8.2` 通过最低版本检查，audit 扫描 help 返回的全部 22 个 kinds。
+- 当前主机 executable 与 integration 状态分别报告；例如 `cursor` 找到
+  `cursor-agent` 但 integration 为 missing，`pi`/`claude`/`codex` 为 current。
+- audit 只执行 `herdr integration status`，未执行任何 `herdr integration install`；
+  缺失项以 warning/report 表示，不阻断安装。
 
 生产实现必须分别验证脚本静态检查、fixture/mock contract，以及真实 Herdr pane 几何、
 重复布局、部分 agent 失败和通知行为。仅有 shell syntax 通过不能证明运行时契约成立。

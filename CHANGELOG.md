@@ -16,6 +16,8 @@
 - 移除废弃的 Shell 数字切换器，保留 Python 作为唯一实现。
 - Agent Dispatch 使用包含 workspace 和视觉位置的唯一名称，直接交给 Herdr 处理
   canonical kind，并汇总 start/prompt 失败后发送一次结果通知。
+- Installer 要求 Herdr 0.8.2+，加入 versioned agent catalog 和只读 executable/integration
+  audit；未知 kind 仅报告 `availability unknown`，不自动安装 integration。
 
 ## [0.4.0] - 02-09-2026
 

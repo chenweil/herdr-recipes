@@ -19,6 +19,20 @@ hopen-once.sh --version     # hopen-once 0.4.0
 
 每个版本改了什么看仓库根的 [CHANGELOG.md](../CHANGELOG.md)。
 
+## agent-audit.py — 只读 agent catalog audit
+
+`agent-audit.py` 要求 Herdr `0.8.2+`，解析当前 `herdr agent start --help` 的全部
+canonical kinds，并读取 `herdr integration status`。它根据
+`config/agent-catalog.json` 分别报告 executable 的 `found`/`missing`/`unknown` 和
+integration 的 `current`/`missing`/`outdated`/`N/A` 状态。
+
+catalog 只是安装审计和可读性报告，不是 runtime allowlist；未知 kind 显示
+`availability unknown` 后继续。审计不会调用 `herdr integration install`。
+
+```bash
+python3 scripts/agent-audit.py
+```
+
 ## herdr-pane-switch.py — 按视觉顺序切换 pane
 
 脚本调用 `herdr pane layout --current` 获取调用方所在布局，按 rectangle 的

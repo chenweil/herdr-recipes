@@ -26,6 +26,8 @@ SCRIPTS_SRC="$REPO_DIR/scripts"
 SCRIPTS_DST="$HERDR_HOME/scripts"
 CONFIG_SRC="$REPO_DIR/config/keys.toml"
 CONFIG_DST="$HERDR_HOME/config.toml"
+CATALOG_SRC="$REPO_DIR/config/agent-catalog.json"
+AUDIT_SRC="$REPO_DIR/scripts/agent-audit.py"
 
 MARKER_BEGIN="# >>> herdr-recipes managed: begin >>>"
 MARKER_END="# <<< herdr-recipes managed: end <<<"
@@ -60,7 +62,15 @@ done
 [ -f "$CONFIG_DST" ] || die "herdr config not found: $CONFIG_DST"
 [ -d "$SCRIPTS_SRC" ] || die "scripts/ missing in repo at $SCRIPTS_SRC"
 [ -f "$CONFIG_SRC" ]  || die "keys.toml missing in repo at $CONFIG_SRC"
+[ -f "$CATALOG_SRC" ] || die "agent catalog missing in repo at $CATALOG_SRC"
+[ -f "$AUDIT_SRC" ] || die "agent audit missing in repo at $AUDIT_SRC"
 command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH"
+
+if [ "$ACTION" != "uninstall" ]; then
+  command -v herdr >/dev/null 2>&1 || die "herdr not found in PATH (Herdr 0.8.2+ is required)"
+  python3 "$AUDIT_SRC" --catalog "$CATALOG_SRC" --check-version \
+    || die "Herdr 0.8.2 or newer is required"
+fi
 
 # ── Uninstall path ─────────────────────────────────────────────────
 if [ "$ACTION" = "uninstall" ]; then
@@ -201,6 +211,12 @@ if command -v herdr >/dev/null 2>&1; then
   fi
 else
   warn "'herdr' not found in PATH — skipped validation/reload"
+fi
+
+if python3 "$AUDIT_SRC" --catalog "$CATALOG_SRC"; then
+  say "agent audit: complete"
+else
+  warn "agent audit failed; installation remains complete"
 fi
 
 say "done"
