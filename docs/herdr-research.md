@@ -3,7 +3,7 @@
 > 调研日期：2026-09-03
 > 验证环境：Herdr 0.8.2，macOS
 > 方法：官方文档、本机 CLI/schema、仓库源码和社区项目交叉核验
-> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3/#4 已完成实现、focused tests 和真实 Herdr smoke
+> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3/#4 已完成实现，issue #5 已完成文档示例与 smoke 记录
 
 ## 1. 资料与证据等级
 
@@ -224,7 +224,7 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 2. 删除旧切换器，实现 socket/caller context 与视觉顺序修复。已完成。
 3. 修复 agent name、启动权威、prompt 错误和汇总通知。已完成。
 4. 加入版本门禁、agent catalog 与 install audit。已完成。
-5. 增加外部 workflow 组合示例，并完成 focused tests 与真实 Herdr smoke。
+5. 增加外部 workflow 组合示例，并完成 focused tests 与真实 Herdr smoke。已完成。
 
 ### Issue #2 真实 smoke（2026-09-04）
 
@@ -253,6 +253,20 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   `cursor-agent` 但 integration 为 missing，`pi`/`claude`/`codex` 为 current。
 - audit 只执行 `herdr integration status`，未执行任何 `herdr integration install`；
   缺失项以 warning/report 表示，不阻断安装。
+
+### Issue #5 release-candidate smoke matrix（2026-09-07）
+
+- Herdr 0.8.2 真实布局矩阵已完成，按 rectangle `(y,x)` 排序得到：
+  `11 = left → right`；`12 = left → right-top → right-bottom`；
+  `21 = left-top → right → left-bottom`；`22 = left-top → right-top → left-bottom → right-bottom`；
+  `13 = left → right-top → right-mid → right-bottom`；
+  `31 = left-top → right → left-mid → left-bottom`；
+  `111 = left → middle → right`。Smoke workspace `w5A`–`w5G` 已全部清理。
+- Duplicate-name、成功 `done` notification、partial failure `request` notification 和
+  later-pane retention 证据沿用 issue #3 的真实 `w57`/`w58`/`w59` smoke；当前 host
+  audit 为 Herdr 0.8.2 read-only，未执行 integration install。
+- 最终 verification 分层记录为：fixture/full tests、Python/shell static checks、
+  catalog/install audit fixtures、真实 Herdr smoke；未引入 Workflow runtime 依赖。
 
 生产实现必须分别验证脚本静态检查、fixture/mock contract，以及真实 Herdr pane 几何、
 重复布局、部分 agent 失败和通知行为。仅有 shell syntax 通过不能证明运行时契约成立。

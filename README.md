@@ -126,6 +126,44 @@ Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-N/--pane-name`, `-n
 
 `hopen-once.sh` shares layout/split/agent primitives with `hopen.sh` (`_h_build_layout`, `_start_agent`, etc.) and inherits the kind alias table. It bypasses `hopen-agents.conf` entirely — the kinds you pass are the kinds that get started, no merge with any template.
 
+## Compose with an external Workflow
+
+This repository is a Recipe Launcher: it prepares a layout and performs Dispatch. It does not
+wait for agent work, retry steps, collect results, or clean up workspaces. Those responsibilities
+can be delegated to the optional [herdr-workflows](https://github.com/aorumbayev/herdr-workflows)
+plugin; installing that plugin is not required by this repository.
+
+For example, prepare a bare Recipe, then run an external review Workflow:
+
+```bash
+bash scripts/hopen-once.sh --layout 22 --no-agents
+
+# Optional external Workflow tool: owns the later run/wait/review lifecycle.
+hwf run review
+```
+
+The corresponding `.hwf/workflows/review.yaml` can stay minimal. The YAML shape below follows the
+upstream [workflow example](https://github.com/aorumbayev/herdr-workflows#write-your-first-workflow);
+this repository does not validate or execute the file, so re-check the upstream contract before use:
+
+```yaml
+version: v1alpha1
+steps:
+  - id: diff
+    run: [git, diff, HEAD]
+  - agent: |
+      Review this diff and report blocking issues only.
+
+      {{steps.diff.stdout}}
+    using: claude
+    when: "{{steps.diff.stdout}}"
+    pane:
+      open: beside
+```
+
+The Workflow owns waiting and completion; the `Recipe Ready` result from this repository only
+means that layout setup and configured Dispatch succeeded (the notification title is `Recipe ready`).
+
 Kinds are placed in panes in visual reading order (left-to-right, top-to-bottom). Layout 22 with `codex codex pi claude` gives you:
 - top-left → codex
 - top-right → codex

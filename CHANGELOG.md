@@ -18,6 +18,7 @@
   canonical kind，并汇总 start/prompt 失败后发送一次结果通知。
 - Installer 要求 Herdr 0.8.2+，加入 versioned agent catalog 和只读 executable/integration
   audit；未知 kind 仅报告 `availability unknown`，不自动安装 integration。
+- 补充与外部 Workflow 组合的最小文档示例，并记录七布局和 release-candidate smoke matrix。
 
 ## [0.4.0] - 02-09-2026
 

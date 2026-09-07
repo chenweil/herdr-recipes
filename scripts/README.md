@@ -394,3 +394,10 @@ w4Y:p3  label=right-bottom   ← 兜底
 
 两者共用 `_h_build_layout / _position_for / _start_agent / _resolve_kind`，
 所以别名 (`op`/`cc`/`cd`/`pi`) 和 layout 表都互通。
+
+## 与外部 Workflow 组合
+
+根目录 [README 的组合示例](../README.md#compose-with-an-external-workflow) 说明如何把
+`hopen.sh` / `hopen-once.sh` 与外部 [herdr-workflows](https://github.com/aorumbayev/herdr-workflows)
+组合。本仓库不安装 Workflow 工具，也不新增 wrapper command；`Recipe Ready` 只表示
+setup/Dispatch 成功（通知标题为 `Recipe ready`），不表示 agent task 已完成。
