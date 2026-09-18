@@ -175,6 +175,130 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(kinds, ["opencode", "pi"])
 
+    def test_layout_221_builds_five_panes_and_dispatches_in_visual_order(self):
+        result = self.run_launcher(
+            HOPEN_ONCE,
+            "-l",
+            "221",
+            "codex",
+            "pi",
+            "claude",
+            "hermes",
+            "opencode",
+            FAKE_WORKSPACE_ID="w-221",
+        )
+
+        calls = self.read_calls()
+        splits = self.calls_for(calls, "pane", "split")
+        starts = self.calls_for(calls, "agent", "start")
+        split_targets = [
+            (call[2], call[call.index("--direction") + 1]) for call in splits
+        ]
+        target_panes = [call[call.index("--pane") + 1] for call in starts]
+        names = [call[2] for call in starts]
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            split_targets,
+            [
+                ("w-221:p1", "right"),
+                ("w-221:p2", "right"),
+                ("w-221:p1", "down"),
+                ("w-221:p2", "down"),
+            ],
+        )
+        self.assertEqual(
+            target_panes,
+            ["w-221:p1", "w-221:p2", "w-221:p3", "w-221:p4", "w-221:p5"],
+        )
+        self.assertEqual(
+            names,
+            [
+                "hopen-w-221-left-top",
+                "hopen-w-221-middle-top",
+                "hopen-w-221-right",
+                "hopen-w-221-left-bottom",
+                "hopen-w-221-middle-bottom",
+            ],
+        )
+
+    def test_layout_122_builds_five_panes_and_maps_middle_and_right_columns(self):
+        result = self.run_launcher(
+            HOPEN_ONCE,
+            "-l",
+            "122",
+            "codex",
+            "pi",
+            "claude",
+            "hermes",
+            "opencode",
+            FAKE_WORKSPACE_ID="w-122",
+        )
+
+        calls = self.read_calls()
+        splits = self.calls_for(calls, "pane", "split")
+        starts = self.calls_for(calls, "agent", "start")
+        split_targets = [
+            (call[2], call[call.index("--direction") + 1]) for call in splits
+        ]
+        target_panes = [call[call.index("--pane") + 1] for call in starts]
+        names = [call[2] for call in starts]
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            split_targets,
+            [
+                ("w-122:p1", "right"),
+                ("w-122:p2", "right"),
+                ("w-122:p3", "down"),
+                ("w-122:p2", "down"),
+            ],
+        )
+        self.assertEqual(
+            target_panes,
+            ["w-122:p1", "w-122:p2", "w-122:p3", "w-122:p5", "w-122:p4"],
+        )
+        self.assertEqual(
+            names,
+            [
+                "hopen-w-122-left",
+                "hopen-w-122-middle-top",
+                "hopen-w-122-right-top",
+                "hopen-w-122-middle-bottom",
+                "hopen-w-122-right-bottom",
+            ],
+        )
+
+    def test_hopen_conf_dispatch_supports_new_layout_positions(self):
+        self.write_conf(
+            """
+            [layout.221.panes.left-top]
+            kind = "codex"
+            [layout.221.panes.middle-top]
+            kind = "pi"
+            [layout.221.panes.right]
+            kind = "claude"
+            [layout.221.panes.left-bottom]
+            kind = "hermes"
+            [layout.221.panes.middle-bottom]
+            kind = "opencode"
+            """
+        )
+        result = self.run_launcher(HOPEN, "221", FAKE_WORKSPACE_ID="w-conf-221")
+
+        starts = self.calls_for(self.read_calls(), "agent", "start")
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            [call[call.index("--pane") + 1] for call in starts],
+            [
+                "w-conf-221:p1",
+                "w-conf-221:p2",
+                "w-conf-221:p3",
+                "w-conf-221:p4",
+                "w-conf-221:p5",
+            ],
+        )
+
     def test_reopening_layout_uses_unique_readable_names(self):
         first = self.run_launcher(
             HOPEN_ONCE,

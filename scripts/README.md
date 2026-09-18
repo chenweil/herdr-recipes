@@ -9,8 +9,8 @@
 `herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
-hopen.sh -v                 # hopen 0.5.0
-hopen-once.sh --version     # hopen-once 0.5.0
+hopen.sh -v                 # hopen 0.6.0
+hopen-once.sh --version     # hopen-once 0.6.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
@@ -44,7 +44,7 @@ session socket。布局响应、focus 响应、socket 错误和越界索引都�
 ## hopen.sh — 按代号开 herdr pane 布局
 
 `hopen.sh` 接收一个布局代号，开一个新的 herdr workspace 摆好对应布局，
-然后 focus 过去。代号约定「左列数 + 右列数」：
+然后 focus 过去。每一位数字表示从左到右对应列的 pane 数：
 
 | 代号 | 视觉布局       | 用途                    |
 |------|---------------|-------------------------|
@@ -55,6 +55,8 @@ session socket。布局响应、focus 响应、socket 错误和越界索引都�
 | 31   | `[A/B/C][D]`  | 镜像 13                 |
 | 22   | `[A/B][C/D]`  | 2×2                     |
 | 111  | `[A][B][C]`   | 三列等宽                |
+| 221  | `[A/B][C/D][E]` | 三列 2/2/1              |
+| 122  | `[A][B/C][D/E]` | 三列 1/2/2              |
 
 ### 用法
 
@@ -146,8 +148,10 @@ kind = "hermes"
 | 31   | left-top / left-mid / left-bottom / right |
 | 22   | left-top / left-bottom / right-top / right-bottom |
 | 111  | left / middle / right |
+| 221  | left-top / left-bottom / middle-top / middle-bottom / right |
+| 122  | left / middle-top / middle-bottom / right-top / right-bottom |
 
-21、31、22 的 pane 创建顺序与视觉顺序不同；脚本会把
+21、31、22、221、122 的 pane 创建顺序与视觉顺序不同；脚本会把
 `workspace create` 返回的 root pane 和后续 split pane 映射到上面的视觉位置，
 配置时只使用位置名，不要按 pane ID 或创建先后猜位置。内部顺序固定为
 `idx=0 root`，之后按 `_steps_for` 的 split 顺序追加；例如 21 先创建 `right`，
@@ -269,9 +273,9 @@ hopen-once.sh -C ~ -l 22 -k codex:4             # 家目录
 | 4 | 22（2x2） |
 | 其它 | 报错，要求 `--layout` 显式指定 |
 
-当前 repo 没有 5+ pane 的 layout code；如需更多 pane，先在 `hopen.sh` 的
-`_steps_for` 里加新 code + 在 `hopen-once.sh` 的 `_h_row_major` / `_panes_for`
-里补映射。
+`221` 和 `122` 是当前提供的 5-pane layout code；其它 5+ pane 形状仍需在
+`hopen.sh` 的 `_steps_for` 里加新 code，并在 `hopen-once.sh` 的 `_h_row_major`
+和 `_panes_for` 里补映射。
 
 ### Workspace 和 Tab 命名
 
@@ -374,6 +378,8 @@ w4Y:p3  label=right-bottom   ← 兜底
 | 31  | left-top → left-mid → left-bottom → right |
 | 22  | left-top → right-top → left-bottom → right-bottom |
 | 111 | left → middle → right |
+| 221 | left-top → middle-top → right → left-bottom → middle-bottom |
+| 122 | left → middle-top → right-top → middle-bottom → right-bottom |
 
 例：`hopen-once.sh --layout 22 codex codex pi claude` →
 - top-left → codex

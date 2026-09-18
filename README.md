@@ -6,7 +6,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 
 | File | Purpose |
 |---|---|
-| `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
+| `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`, `221`, `122`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
@@ -24,10 +24,10 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 Every script accepts `-v`, `-V`, or `--version`:
 
 ```bash
-./install.sh --version                  # herdr-recipes 0.5.0
-scripts/hopen.sh -v                     # hopen 0.5.0
-scripts/hopen-once.sh -v                # hopen-once 0.5.0
-scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.5.0
+./install.sh --version                  # herdr-recipes 0.6.0
+scripts/hopen.sh -v                     # hopen 0.6.0
+scripts/hopen-once.sh -v                # hopen-once 0.6.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.6.0
 ```
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
@@ -43,7 +43,7 @@ reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release no
 
 ## Layouts
 
-Codes read as "left column + right column":
+Each digit is the number of panes in one column, read from left to right:
 
 | Code | Panes | Visual | Position names |
 |---|---|---|---|
@@ -54,12 +54,14 @@ Codes read as "left column + right column":
 | `13` | 4 | `[A][B/C/D]` | left / right-top / right-mid / right-bottom |
 | `31` | 4 | `[A/B/C][D]` | left-top / left-mid / left-bottom / right |
 | `22` | 4 | `[A/B][C/D]` | left-top / right-top / left-bottom / right-bottom |
+| `221` | 5 | `[A/B][C/D][E]` | left-top / middle-top / right / left-bottom / middle-bottom |
+| `122` | 5 | `[A][B/C][D/E]` | left / middle-top / right-top / middle-bottom / right-bottom |
 
 Position names are what you use in `hopen-agents.conf` section headers and what
 unnamed panes fall back to as their label.
 
 See `scripts/README.md` for the full mapping and creation-order caveats
-(`21`, `31`, `22` create panes in a different order than they appear).
+(`21`, `31`, `22`, `221`, `122` create panes in a different order than they appear).
 
 ## Ad-hoc layout via command line (`hopen-once.sh`)
 
@@ -77,6 +79,8 @@ hopen-once.sh op cd pi                       # 3 panes, layout 12
 # Explicit layout when auto-pick doesn't fit
 hopen-once.sh -l 13 codex codex codex pi     # 4 panes, layout 13
 hopen-once.sh -l 11 codex pi                 # 2 panes, left/right split
+hopen-once.sh -l 221 -k codex:5              # 5 panes, [A/B][C/D][E]
+hopen-once.sh -l 122 -k codex:5              # 5 panes, [A][B/C][D/E]
 
 # Repeat the same kind N times with `K:N` (saves typing `-k` N times)
 hopen-once.sh -l 22 -k codex:4               # 4 panes, all codex

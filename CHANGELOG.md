@@ -9,6 +9,24 @@
 
 ## [Unreleased]
 
+## [0.6.0] - 19-09-2026
+
+### 新增
+
+- **`221` 和 `122` 布局**（五 pane，三列）。`221` 是 `[A/B][C/D][E]`，`122` 是 `[A][B/C][D/E]`。
+  - `hopen.sh 221` / `hopen-once.sh -l 221` 都认，`122` 同理；`hopen-once.sh` 不传 `-l` 时
+    5 个 kind 仍要求显式指定布局
+  - 位置名：`221` 用 left-top / left-bottom / middle-top / middle-bottom / right，
+    `122` 用 left / middle-top / middle-bottom / right-top / right-bottom，
+    `hopen-agents.conf` 里按 `[layout.221.panes.<位置名>]` 配置
+  - `_steps_for` 新增 `PANE<n>` parent token，可从任意已创建的 pane 分裂；
+    两个布局的创建顺序与视觉顺序不同，脚本负责映射
+  - 未改 `config/keys.toml`，没有新增快捷键
+- 测试覆盖 `221` / `122` 的 split 顺序、视觉顺序派位和 conf 位置名派位；
+  Herdr 0.9.1 真实创建并核对了两个布局的 geometry。
+
+现在全部 9 个布局：`11` `12` `21` `22` `13` `31` `111` `221` `122`。
+
 ## [0.5.0] - 07-09-2026
 
 ### 变更

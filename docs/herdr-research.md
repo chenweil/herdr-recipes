@@ -114,7 +114,7 @@ executable 存在。
 
 ## 3. herdr-recipes 当前状态
 
-当前版本为 0.5.0。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
+当前版本为 0.6.0。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
 数字切换、键位配置和 installer。
 
 ### 已经成立的实现
@@ -253,6 +253,13 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   `cursor-agent` 但 integration 为 missing，`pi`/`claude`/`codex` 为 current。
 - audit 只执行 `herdr integration status`，未执行任何 `herdr integration install`；
   缺失项以 warning/report 表示，不阻断安装。
+
+### 五 pane 布局 smoke（2026-09-19）
+
+- `221` 和 `122` 在 Herdr 0.9.1 上真实创建并按 rectangle 核对了 geometry：
+  `221 = left-top → middle-top → right → left-bottom → middle-bottom`；
+  `122 = left → middle-top → right-top → middle-bottom → right-bottom`。
+  临时 workspace 已清理。布局构建新增 `PANE<n>` parent token，允许从任意已创建 pane 分裂。
 
 ### Issue #5 release-candidate smoke matrix（2026-09-07）
 

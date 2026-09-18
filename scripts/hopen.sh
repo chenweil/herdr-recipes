@@ -1,7 +1,7 @@
 #!/usr/bin/env bash
 # hopen.sh — 按代号打开 herdr pane 布局，并按 conf 启动 agent
 #
-# 用法：  bash hopen.sh <11|12|13|21|31|22|111> [--no-agents|-n]
+# 用法：  bash hopen.sh <11|12|13|21|31|22|111|221|122> [--no-agents|-n]
 #   --no-agents, -n   开布局但跳过 hopen-agents.conf，不启动任何 agent
 #   --version, -v/-V  打印版本号后退出
 #
@@ -13,6 +13,8 @@
 #   31   右 1 + 左 3    [A / B / C][D]
 #   22   2x2            [A / B][C / D]
 #   111  三列各一        [A][B][C]
+#   221  三列 2/2/1      [A / B][C / D][E]
+#   122  三列 1/2/2      [A][B / C][D / E]
 #
 # Agent 启动：hopen.sh 跑完布局后读 hopen-agents.conf，按 section 启动 agent。
 #   conf 缺失 / section 缺失 / pane 没在 conf 里 → 跳过；
@@ -159,6 +161,15 @@ _h_build_layout() {
     case "$parent_tok" in
       ROOT) parent="$root_pane" ;;
       LAST) parent="$pid"      ;;
+      PANE*)
+        local pane_idx="${parent_tok#PANE}"
+        if [[ "$pane_idx" =~ ^[0-9]+$ ]] && [ "$pane_idx" -lt "${#created[@]}" ]; then
+          parent="${created[$pane_idx]}"
+        else
+          echo "hopen: 内部错 parent_tok=$parent_tok" >&2
+          return 1
+        fi
+        ;;
       *) echo "hopen: 内部错 parent_tok=$parent_tok" >&2; return 1 ;;
     esac
     pid=$(_h_split "$parent" "$direction") || {
@@ -197,6 +208,7 @@ _h_build_layout() {
 # 每步格式：<parent_token> <direction>
 #   parent_token: ROOT  (从 root 分裂)
 #                 LAST  (从上一个创建的 pane 分裂)
+#                 PANE<n> (从 created[] 的指定索引分裂)
 #   direction:    right / down
 #
 # 11: [A][B]              -> ROOT right (B)
@@ -206,6 +218,8 @@ _h_build_layout() {
 # 31: [A/B/C][D]          -> ROOT right (D), ROOT down (B), LAST down (C)
 # 22: [A/B][C/D]          -> ROOT right (C), LAST down (D), ROOT down (B)
 # 111: [A][B][C]          -> ROOT right (B), LAST right (C)
+# 221: [A/B][C/D][E]      -> ROOT right (C), LAST right (E), ROOT down (B), PANE1 down (D)
+# 122: [A][B/C][D/E]      -> ROOT right (B), LAST right (D), PANE2 down (E), PANE1 down (C)
 _steps_for() {
   case "$1" in
     11)  printf 'ROOT right\n' ;;
@@ -215,8 +229,10 @@ _steps_for() {
     31)  printf 'ROOT right\nROOT down\nLAST down\n' ;;
     22)  printf 'ROOT right\nLAST down\nROOT down\n' ;;
     111) printf 'ROOT right\nLAST right\n' ;;
+    221) printf 'ROOT right\nLAST right\nROOT down\nPANE1 down\n' ;;
+    122) printf 'ROOT right\nLAST right\nPANE2 down\nPANE1 down\n' ;;
     *)
-      echo "hopen: 未知布局 '$1'。支持: 11 12 13 21 31 22 111" >&2
+      echo "hopen: 未知布局 '$1'。支持: 11 12 13 21 31 22 111 221 122" >&2
       return 2 ;;
   esac
 }
@@ -237,6 +253,8 @@ _steps_for() {
 #   31: left-top / right / left-mid / left-bottom
 #   22: left-top / right-top / right-bottom / left-bottom
 #   111: left / middle / right
+#   221: left-top / middle-top / right / left-bottom / middle-bottom
+#   122: left / middle-top / right-top / right-bottom / middle-bottom
 # section 名仍然是给 conf 使用的人类视觉位置
 #   11: [A left][B right]
 #   12: [A left][B right-top][C right-bottom]
@@ -245,6 +263,8 @@ _steps_for() {
 #   31: [A left-top][B left-mid][C left-bottom][D right]
 #   22: [A left-top][B left-bottom][C right-top][D right-bottom]
 #   111:[A left][B middle][C right]
+#   221: [A left-top][B left-bottom][C middle-top][D middle-bottom][E right]
+#   122: [A left][B middle-top][C middle-bottom][D right-top][E right-bottom]
 #
 # 用法：_position_for <layout> <pane_index_0based>
 _position_for() {
@@ -260,6 +280,10 @@ _position_for() {
     22:0) echo left-top       ;; 22:1) echo right-top         ;;
     22:2) echo right-bottom   ;; 22:3) echo left-bottom        ;;
     111:0) echo left          ;; 111:1) echo middle          ;; 111:2) echo right        ;;
+    221:0) echo left-top      ;; 221:1) echo middle-top       ;;
+    221:2) echo right         ;; 221:3) echo left-bottom       ;; 221:4) echo middle-bottom ;;
+    122:0) echo left          ;; 122:1) echo middle-top       ;;
+    122:2) echo right-top     ;; 122:3) echo right-bottom      ;; 122:4) echo middle-bottom ;;
     *) echo "pos-idx-$idx" ;;  # 兜底：未知 layout 时用索引本身当名字
   esac
 }
@@ -321,6 +345,7 @@ _panes_for() {
     11)        echo 2 ;;
     12|21|111) echo 3 ;;
     13|31|22)  echo 4 ;;
+    221|122)   echo 5 ;;
     *)         echo 0 ;;
   esac
 }
@@ -459,7 +484,7 @@ hopen() {
   done
 
   [ -n "$code" ] || {
-    echo "用法: hopen <11|12|13|21|31|22|111> [--no-agents|-n] [--version|-v]" >&2
+    echo "用法: hopen <11|12|13|21|31|22|111|221|122> [--no-agents|-n] [--version|-v]" >&2
     return 2
   }
 
