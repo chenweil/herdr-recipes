@@ -75,6 +75,11 @@ def parse_integration_status(text):
         if not match:
             continue
         target = match.group(1).strip()
+        # Herdr 0.9.1 wraps the target in " (...) " for markers like
+        # "experimental"; strip that suffix so the key matches the
+        # catalog's integration_targets (e.g. "letta (experimental)"
+        # -> "letta").
+        target = re.sub(r"\s*\([^)]*\)\s*$", "", target)
         detail = match.group(2).strip().lower()
         if detail.startswith("current"):
             status = "current"

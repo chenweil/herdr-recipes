@@ -1,5 +1,5 @@
 {
-  "catalog_version": 1,
+  "catalog_version": 2,
   "min_herdr_version": "0.8.2",
   "aliases": {
     "op": "opencode",
@@ -28,6 +28,8 @@
     {"kind": "kilo", "executables": ["kilo"], "integration_targets": ["kilo"]},
     {"kind": "qodercli", "executables": ["qodercli"], "integration_targets": ["qodercli"]},
     {"kind": "qwen", "executables": ["qwen"], "integration_targets": ["qwen"]},
-    {"kind": "maki", "executables": ["maki"], "integration_targets": []}
+    {"kind": "maki", "executables": ["maki"], "integration_targets": []},
+    {"kind": "letta", "executables": ["letta"], "integration_targets": ["letta"]},
+    {"kind": "muse", "executables": ["muse"], "integration_targets": []}
   ]
 }

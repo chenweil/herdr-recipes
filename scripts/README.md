@@ -81,7 +81,7 @@ key = "prefix+alt+1"
 command = "bash ~/.config/herdr/scripts/hopen.sh 12"
 description = "hopen 12 — [A][B/C]"
 
-# 2..6 同理绑到 21/22/13/31/111，7 绑 11
+# 2..6 同理绑到 21/22/13/31/111，7 绑 11，8 绑 221，9 绑 122
 ```
 
 配置改完后热重载：

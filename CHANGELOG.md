@@ -9,6 +9,31 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **`prefix+alt+8` / `prefix+alt+9` 与对应的 `prefix+ctrl+8/9`（带 `--no-agents`）
+  分别绑到 `hopen.sh 221` / `hopen.sh 122`**（归下一个 minor **0.7.0**，不是
+  v0.6.x patch）。`prefix+alt+1..9` 依次打开 `12 21 22 13 31 111 11 221 122`，
+  `prefix+ctrl+1..9` 同样代号但起 bare pane，`prefix+1..6` 仍走
+  `herdr-pane-switch.py`。`config/keys.toml`、`install.sh` 的 `legacy_keys`
+  正则、`README.md`、`scripts/README.md`、`scripts/hopen.sh` 的对应行已同步
+  到 1..9；新写 `tests/test_keys_toml.py` 用 `tomllib` 锁住 alt/ctrl 1..9 映射
+  与头部注释，`tests/test_agent_audit.py` 加了 isolation 用例验证旧手工
+  `prefix+alt+8` 升级时被清掉、managed block 接管。
+- **9 布局 smoke matrix 已在 Herdr 0.9.1 上重跑**，按 rectangle `(y, x)` 排序核对了
+  `11 12 21 22 13 31 111 221 122`；结果与 `herdr-pane-switch.py` 的 `(y, x)` 顺序及
+  #5 矩阵一致（22 与 122 的末两位与 `(y, x)` 顺序不同是 #5 已记录的既有行为，
+  `hopen-once.sh` 的 `_h_row_major` 表由另开 issue 决定）。记录在
+  `docs/herdr-research.md` 的"九布局 smoke matrix"节，含真实 ws id 与 pane rect。
+- **`config/agent-catalog.json` 已 bump 到 catalog v2**：补齐 Herdr 0.9.1 新增的
+  `letta` 与 `muse` 两种 kind。`letta` 在 `herdr integration install --help` 的
+  18 个 target 列表中（含 `(experimental)` 后缀），`integration_targets` 保留
+  `["letta"]`；`muse` 不在 integration target 列表中，`integration_targets` 留空。
+  `scripts/agent-audit.py::parse_integration_status` 已剥离 ` (...)` 后缀，
+  并加测试锁住行为。
+
+关闭 #8。
+
 ## [0.6.1] - 19-09-2026
 
 ### 修复

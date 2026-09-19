@@ -1,9 +1,9 @@
 # Herdr 调研与验证记录
 
 > 调研日期：2026-09-03
-> 验证环境：Herdr 0.8.2，macOS
+> 验证环境：Herdr 0.8.2 + Herdr 0.9.1（五 pane 布局 + 全 9 布局 smoke），macOS
 > 方法：官方文档、本机 CLI/schema、仓库源码和社区项目交叉核验
-> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3/#4 已完成实现，issue #5 已完成文档示例与 smoke 记录
+> 状态：事实已复核；产品边界已经讨论确认；issue #2/#3/#4/#5/#6/#7/#8 已完成实现与 smoke 记录
 
 ## 1. 资料与证据等级
 
@@ -79,6 +79,16 @@ copilot kimi kiro droid amp grok hermes kilo qodercli qwen maki
 `herdr agent start --kind`，由 Herdr 负责 kind 校验、canonical executable 选择、
 PATH 查找和 readiness 判断。
 
+Herdr 0.9.1 重测（2026-09-19）：
+- `herdr agent start --help` 列出 **24 个** canonical kinds，比 0.8.2 的 22 个
+  多出 `letta` 与 `muse`；本仓库已 bump `config/agent-catalog.json` 到 catalog v2。
+- `herdr integration install --help` 的 possible values 含 **18 个** integration
+  target（pi, omp, claude, codex, copilot, devin, droid, kimi, opencode, kilo,
+  hermes, qodercli, qwen, cursor, mastracode, antigravity-cli, grok, letta），
+  其中 `letta` 在状态输出里以 `letta (experimental): ...` 形式出现，解析时
+  需剥离 ` (...)` 后缀才能匹配 catalog。`muse` 不在 integration target 列表中，
+  故 `muse.integration_targets` 留空。
+
 ### 2.3 Herdr 没有公开“已安装 agent”查询（CLI/schema 事实）
 
 Herdr 设置界面会为 PATH 中找到的 agents 推荐 integrations，但 0.8.2 没有公开 CLI
@@ -101,6 +111,15 @@ executable 存在。
   `agent start --help` 的 22 个 kind 中，却不在本机 manifest 集合中。
 - manifest 状态包含 remote/bundled 来源、缓存版本和最近检查结果；因此 manifest 集合
   可能随远程更新变化，不能当作固定的 supported-kind catalog。
+
+### 2.4a 本机环境观察（2026-09-19，Herdr 0.9.1）
+
+- 本机 Herdr 升级到 0.9.1；`python3 --version` 报 Python 3.14.6。
+- 24 个 kind 中：`letta` 与 `muse` 的 executable 均缺失（PATH 中没有 `letta` /
+  `muse` 可执行文件），其他 kind 的 executable 与 2026-09-03 观察基本一致。
+- 0.9.1 的 integration status 输出在 target 后追加 ` (...)` 后缀（如
+  `letta (experimental): not installed (...)`），catalog 解析路径已加 ` (...)`
+  剥离避免误报为 unknown。
 
 ### Integration 与恢复边界
 
@@ -267,6 +286,27 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   `221 = left-top → middle-top → right → left-bottom → middle-bottom`；
   `122 = left → middle-top → right-top → middle-bottom → right-bottom`。
   临时 workspace 已清理。布局构建新增 `PANE<n>` parent token，允许从任意已创建 pane 分裂。
+
+### 九布局 smoke matrix（Herdr 0.9.1，2026-09-19）
+
+- 全部 9 个布局在 Herdr 0.9.1 上真实创建并按 rectangle `(y, x)` 排序核对（ws id /
+  rect 见每条；rect 格式 `(x, y, w, h)`）。临时 workspace 已全部关闭，开跑前后
+  `herdr workspace list` 完全一致。
+  - `11`（ws=w5X）：`p1 → p2`；p1 rect=(0,0,76,44)，p2 rect=(76,0,75,44)。
+  - `12`（ws=w5Y）：`p1 → p2 → p3`；p1=(0,0,76,44)，p2=(76,0,75,22)，p3=(76,22,75,22)。
+  - `21`（ws=w5Z）：`p1 → p2 → p3`；p1=(0,0,76,22)，p2=(76,0,75,44)，p3=(0,22,76,22)。
+  - `22`（ws=w50）：`p1 → p2 → p4 → p3`；p1=(0,0,76,22)，p2=(76,0,75,22)，p4=(0,22,76,22)，p3=(76,22,75,22)。
+  - `13`（ws=w61）：`p1 → p2 → p3 → p4`；p1=(0,0,76,44)，p2=(76,0,75,22)，p3=(76,22,75,11)，p4=(76,33,75,11)。
+  - `31`（ws=w62）：`p1 → p2 → p3 → p4`；p1=(0,0,76,22)，p2=(76,0,75,44)，p3=(0,22,76,11)，p4=(0,33,76,11)。
+  - `111`（ws=w63）：`p1 → p2 → p3`；p1=(0,0,76,44)，p2=(76,0,38,44)，p3=(114,0,37,44)。
+  - `221`（ws=w64）：`p1 → p2 → p3 → p4 → p5`；p1=(0,0,76,22)，p2=(76,0,38,22)，p3=(114,0,37,44)，p4=(0,22,76,22)，p5=(76,22,38,22)。
+  - `122`（ws=w65）：`p1 → p2 → p3 → p5 → p4`；p1=(0,0,76,44)，p2=(76,0,38,22)，p3=(114,0,37,22)，p5=(76,22,38,22)，p4=(114,22,37,22)。
+- `prefix+alt+1..9` 与 `prefix+ctrl+1..9`（--no-agents）已绑到以上 9 个代号；
+  `prefix+1..6` 仍走 `herdr-pane-switch.py`。
+- catalog 与 0.9.1 漂移：0.9.1 新增 `letta` 与 `muse`，已在 `config/agent-catalog.json`
+  bump 到 catalog v2 并被 `tests/test_agent_audit.py` 锁住；`letta` 在
+  `herdr integration install --help` 的 18 个 target 列表里并标 `(experimental)`，
+  `muse` 不在 integration target 列表中（详见 §2.2）。
 
 ### Issue #5 release-candidate smoke matrix（2026-09-07）
 

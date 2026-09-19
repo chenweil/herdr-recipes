@@ -69,12 +69,14 @@ class AgentAuditTests(unittest.TestCase):
             )
         )
 
-    def test_repository_catalog_covers_all_herdr_0_8_2_kinds_and_aliases(self):
+    def test_repository_catalog_covers_all_herdr_0_9_1_kinds_and_aliases(self):
         catalog = json.loads((REPO_ROOT / "config" / "agent-catalog.json").read_text())
         expected = {
             "pi", "claude", "codex", "gemini", "cursor", "devin", "agy", "cline",
             "omp", "mastracode", "opencode", "copilot", "kimi", "kiro", "droid",
             "amp", "grok", "hermes", "kilo", "qodercli", "qwen", "maki",
+            # added against Herdr 0.9.1
+            "letta", "muse",
         }
 
         self.assertEqual({entry["kind"] for entry in catalog["kinds"]}, expected)
@@ -185,6 +187,25 @@ Usage: herdr agent start <NAME> --kind <KIND> --pane <ID>
 
         self.assertEqual(result.returncode, 0, result.stderr)
         self.assertIn("integration=outdated (pi)", result.stdout)
+
+    def test_letta_experimental_marker_strips_to_target_match(self):
+        # Herdr 0.9.1 wraps experimental kinds in " (...) " (e.g.
+        # "letta (experimental)"). Without the suffix strip in
+        # parse_integration_status the target key becomes
+        # "letta (experimental)" which never matches the catalog
+        # integration_targets entry ["letta"], and the audit falls back
+        # to "unknown" instead of reporting "missing". This pins the
+        # strip behavior so the audit correctly reports the install gap.
+        self.write_catalog(
+            [{"kind": "letta", "executables": ["letta"], "integration_targets": ["letta"]}]
+        )
+        self.environment["FAKE_HERDR_HELP"] = "[possible values: letta]"
+        self.environment["FAKE_HERDR_INTEGRATIONS"] = "letta (experimental): not installed (/tmp/letta)\n"
+
+        result = self.run_audit()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        self.assertIn("integration=missing (letta)", result.stdout)
 
 
 class InstallerAuditTests(AgentAuditTests):
@@ -345,6 +366,43 @@ class InstallerAuditTests(AgentAuditTests):
         # The second backup captures the post-install state (original
         # plus the newly written managed block), so it must differ.
         self.assertNotEqual(backups[1].read_text(), original_content)
+
+    def test_install_removes_legacy_prefix_alt_8_then_inserts_managed_copy(self):
+        # Pre-populate the isolated config with a hand-written
+        # `prefix+alt+8` binding that simulates a user who manually wired
+        # 221 before #8 shipped. After install, that key must appear
+        # exactly once in config.toml (legacy removed + managed block
+        # inserted) and the surviving occurrence must sit inside the
+        # managed block. This pins the legacy_keys regex range to 1..9.
+        _, herdr_home, config = self.run_install()  # scaffold isolated home
+        pre_content = config.read_text()
+        legacy_block = (
+            "[[keys.command]]\n"
+            "key = \"prefix+alt+8\"\n"
+            'command = "bash ~/.config/herdr/scripts/hopen.sh 221"\n'
+            "description = \"legacy user-bound alt+8\"\n"
+        )
+        config.write_text(pre_content + "\n" + legacy_block + "\n")
+
+        result, herdr_home, config = self.run_install()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        final_text = config.read_text()
+        key_occurrences = final_text.count('key = "prefix+alt+8"')
+        self.assertEqual(
+            key_occurrences, 1,
+            f"prefix+alt+8 should appear exactly once after install "
+            f"(legacy removed + managed inserted); got {key_occurrences}",
+        )
+        begin = "# >>> herdr-recipes managed: begin >>>"
+        end = "# <<< herdr-recipes managed: end <<<"
+        self.assertIn(begin, final_text)
+        self.assertIn(end, final_text)
+        managed_slice = final_text.split(begin, 1)[1].split(end, 1)[0]
+        self.assertIn(
+            'key = "prefix+alt+8"', managed_slice,
+            "the surviving prefix+alt+8 binding should live inside the managed block",
+        )
 
 
 if __name__ == "__main__":

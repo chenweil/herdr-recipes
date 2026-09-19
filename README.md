@@ -38,8 +38,8 @@ reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release no
 | Chord | Action |
 |---|---|
 | `prefix 1..6` | Switch to pane N in active workspace |
-| `prefix alt 1..7` | Open hopen layout (auto-start agents) — `1=12, 2=21, 3=22, 4=13, 5=31, 6=111, 7=11` |
-| `prefix ctrl 1..7` | Open hopen layout (bare panes, no agents) — same codes |
+| `prefix alt 1..9` | Open hopen layout (auto-start agents) — `1=12, 2=21, 3=22, 4=13, 5=31, 6=111, 7=11, 8=221, 9=122` |
+| `prefix ctrl 1..9` | Open hopen layout (bare panes, no agents) — same codes |
 
 ## Layouts
 
@@ -177,8 +177,9 @@ Kinds are placed in panes in visual reading order (left-to-right, top-to-bottom)
 ## Install (one-time, per machine)
 
 Prerequisites: Herdr `0.8.2+` already installed, `python3` in PATH (used by the pane switcher,
-agent audit, and installer). The installer reports optional executable/integration gaps but
-never installs integrations.
+agent audit, and installer). Running the test suite additionally needs Python 3.11+ (uses
+`tomllib`); the runtime scripts themselves do not. The installer reports optional
+executable/integration gaps but never installs integrations.
 
 ```bash
 git clone https://github.com/chenweil/herdr-recipes.git ~/playground/herdr-recipes
@@ -191,7 +192,7 @@ cd ~/playground/herdr-recipes
 1. Symlinks `~/.config/herdr/scripts/` → `<repo>/scripts/`. If a `scripts/` directory already exists, it's renamed to `scripts.bak.<timestamp>` first.
 2. Backs up `~/.config/herdr/config.toml` to `config.toml.bak.<timestamp>` (using `cp -p` to preserve permissions and mtimes). If that timestamp already exists from a same-second re-run, a `-1` / `-2` / … suffix is appended so no previous backup is overwritten.
 3. Removes any pre-existing managed block (delimited by `# >>> herdr-recipes managed: begin >>>` / `# <<< ... end <<<`) from `~/.config/herdr/config.toml`.
-4. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..7`). This makes upgrading from a manual setup clean.
+4. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..9`). This makes upgrading from a manual setup clean.
 5. Bootstraps `prefix = "cmd+b"` inside the `[keys]` section if no `prefix =` line is already set. Override the default via `PREFIX_DEFAULT=ctrl+b ./install.sh`.
 6. Inserts the managed block (the contents of `config/keys.toml`) inside the `[keys]` section, immediately before the next top-level section (`[experimental]`, `[ui]`, `[theme]`, …).
 7. Runs `herdr config check`, then `herdr server reload-config`.
