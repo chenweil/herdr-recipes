@@ -154,9 +154,13 @@ executable 存在。
    不是 runtime allowlist，也不会执行 integration install。
 
 ### 后续待处理问题
-1. 文档和配置只列出少量别名，但这不限制 canonical full kind：`_resolve_kind` 的默认
-   分支本来就会原样透传。需要保留的便利别名只有 `op | cc | cd`。
-2. 当前没有 Herdr 最低版本门禁，旧 CLI contract 可能再次静默进入脚本。
+1. ~~文档和配置只列出少量别名，但这不限制 canonical full kind：`_resolve_kind` 的默认
+   分支本来就会原样透传。需要保留的便利别名只有 `op | cc | cd`。~~ 已处理：
+   `scripts/hopen.sh` 的 `_resolve_kind` 只保留 `op | cc | cd` 三个便利别名，
+   canonical kind 仍走 `_resolve_kind` 默认分支的原样透传。
+2. ~~当前没有 Herdr 最低版本门禁，旧 CLI contract 可能再次静默进入脚本。~~ 已处理：
+   `scripts/agent-audit.py` 的 `--check-version` 与 `install.sh` 的版本门禁
+   组合使用，强制最低 Herdr 版本要求。
 3. ~~installer 会原地更新用户的 `config.toml`，但不会创建该文件的 `.bak`；这是需要
    明确的备份风险，不应写成无条件的实现优点。~~ 已处理：`install.sh` 的
    `backup_if_exists()` 现在在 install / uninstall 两条路径都会先把 `config.toml`

@@ -103,7 +103,7 @@ herdr server reload-config
 
 - 每次开新 ws，不复用当前 ws；如需"在当前 ws 内调整布局"，另写工具
 - 成功创建的 ws 不会由脚本自动关闭；脚本只在 split 失败时回滚，正常关闭由用户负责
-- herdr 0.8.0 实测通过；旧版 API 差异自担
+- Herdr 0.8.2 实测通过，0.9.1 上 221/122 布局实测通过；旧版 API 差异自担
 - `hopen-agents.conf` 不是通用 TOML 解析器；`kind_for` / `prompt_for` 只支持固定
   格式：从第 1 列开始、精确匹配的 `[layout.XX.panes.POS]` section，以及从第 1 列
   开始的单行 `kind = "..."` / `prompt = "..."`。
@@ -214,11 +214,10 @@ kind 是 Herdr 的内置 agent 枚举值，不是任意 CLI 名或任意 PATH �
 未列出的别名（如 `claude`、`hermes`、`qodercli`）原样传入 herdr。未来 herdr
 新增 kind 时不需要改 `_resolve_kind`，直接用全名即可。
 
-可以在三处用别名：
+可以在两处用别名：
 
 1. `hopen-agents.conf` 的 `kind = "op"`（替代 `kind = "opencode"`）
 2. `hopen-once.sh` 的命令行参数（如果有）
-3. 直接调用 `hopen.sh` 时的 `--kind` / `--kind` / ...
 
 别名的目的：缩短配置和命令行的长度。`kind = "op"` 比 `kind = "opencode"`
 少 6 个字符，在密集配置的 conf 里能省不少。
@@ -399,7 +398,7 @@ w4Y:p3  label=right-bottom   ← 兜底
 | Workspace cwd | 默认当前 `$PWD` | 默认当前 `$PWD`；可用 `--path/-C` 覆盖 |
 
 两者共用 `_h_build_layout / _position_for / _start_agent / _resolve_kind`，
-所以别名 (`op`/`cc`/`cd`/`pi`) 和 layout 表都互通。
+所以别名 (`op`/`cc`/`cd`) 和 layout 表都互通。
 
 ## 与外部 Workflow 组合
 
