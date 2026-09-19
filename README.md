@@ -49,10 +49,10 @@ Each digit is the number of panes in one column, read from left to right:
 |---|---|---|---|
 | `11` | 2 | `[A][B]` | left / right |
 | `12` | 3 | `[A][B/C]` | left / right-top / right-bottom |
-| `21` | 3 | `[A/B][C]` | left-top / left-bottom / right |
+| `21` | 3 | `[A/B][C]` | left-top / right / left-bottom |
 | `111` | 3 | `[A][B][C]` | left / middle / right |
 | `13` | 4 | `[A][B/C/D]` | left / right-top / right-mid / right-bottom |
-| `31` | 4 | `[A/B/C][D]` | left-top / left-mid / left-bottom / right |
+| `31` | 4 | `[A/B/C][D]` | left-top / right / left-mid / left-bottom |
 | `22` | 4 | `[A/B][C/D]` | left-top / right-top / left-bottom / right-bottom |
 | `221` | 5 | `[A/B][C/D][E]` | left-top / middle-top / right / left-bottom / middle-bottom |
 | `122` | 5 | `[A][B/C][D/E]` | left / middle-top / right-top / middle-bottom / right-bottom |
@@ -116,8 +116,9 @@ hopen-once.sh -l 22 -k codex:4 -N "a,b,c,d"
 
 # Positional overflow: KINDS past max_panes go into NAMES (visual order)
 # NAMES[i] lands on the (i+1)-th visual position, not the i-th pane ID.
-hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
-#   pi-top -> visual 1 (left-top), pi-bot -> 2 (left-bottom), cd-right -> 3 (right)
+hopen-once.sh -l 21 pi pi codex pi-top pi-right cd-bottom
+#   pi-top   -> visual 1 (left-top),   pi-right -> 2 (right),
+#   cd-bottom -> visual 3 (left-bottom)
 hopen-once.sh -l 22 codex codex pi claude A B
 #   A -> visual 1 (left-top), B -> 2 (right-top)
 #   visual 3 and 4 get no name, so they fall back to left-bottom / right-bottom

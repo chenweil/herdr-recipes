@@ -34,6 +34,18 @@
 
 关闭 #8。
 
+### 变更
+
+- **`scripts/hopen-once.sh` 的 `21` / `31` kind 派位改为 `(y, x)` 视觉顺序**，
+  与 `prefix+N` 数字切换器以及 smoke 矩阵一致。第 2 个 kind 在 `21` 上从 `left-bottom`
+  变为 `right`，在 `31` 上从 `left-mid` 变为 `right`；`31` 的第 3 个 kind 从 `left-bottom`
+  变为 `left-mid`。属于行为变更：`hopen-once.sh -l 21 a b c` / `-l 31 a b c d`
+  调用现有脚本的用户，第 2 / 第 3 个 kind 落到的 pane 与之前不同。
+  `hopen.sh` 的 `hopen-agents.conf` 派位路径按位置名寻址，不受影响。
+  `README.md`、`scripts/README.md` 与本仓库其它文档里的 21 / 31 位置名示例同步改为视觉顺序。
+
+关闭 #9。
+
 ## [0.6.1] - 19-09-2026
 
 ### 修复

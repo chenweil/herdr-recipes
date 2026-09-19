@@ -51,8 +51,8 @@
 # 跟在 KINDS 后面追加的位置参数当 pane name（按视觉顺序），不用 -N。
 # NAMES[i] 对应第 i+1 个视觉位，不是 pane ID 顺序——21/31/22 的创建顺序跟视觉
 # 顺序不一致，用 `herdr pane list` 核对时注意它按创建顺序返回。
-#   hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
-#     → pi-top = 视觉位 1 (left-top)，pi-bot = 2 (left-bottom)，cd-right = 3 (right)
+#   hopen-once.sh -l 21 pi pi codex pi-top pi-right cd-bottom
+#     → pi-top = 视觉位 1 (left-top)，pi-right = 2 (right)，cd-bottom = 3 (left-bottom)
 #   hopen-once.sh -l 22 codex codex pi claude A B
 #     → A = 视觉位 1 (left-top)，B = 2 (right-top)
 #     → 视觉位 3、4 没给名字，回落成 left-bottom / right-bottom
@@ -82,16 +82,16 @@ SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd)"
 # prevents it from running on source.
 source "$SCRIPT_DIR/hopen.sh"
 
-# 按视觉阅读顺序（行优先）输出每个 layout 的位置名。
-# `hopen.sh` 的 pane 创建顺序是列优先（21/31/22/221/122 会反序），但用户看到的布局是
-# 行优先的。用这个函数把用户传的 NAMES[] 跟 KINDS[] 反查回 created[] 顺序。
+# 全部按 (y, x) 视觉阅读顺序输出每个 layout 的位置名。
+# `hopen.sh` 的 pane 创建顺序在 21/31/22/122 上与 (y, x) 视觉顺序不同；
+# 本表统一按 (y, x) 视觉顺序列出位置名，把用户传入的 KINDS[]/NAMES[] 反查回 created[] 顺序。
 _h_row_major() {
   case "$1" in
     11)  printf 'left\nright\n' ;;
     12)  printf 'left\nright-top\nright-bottom\n' ;;
-    21)  printf 'left-top\nleft-bottom\nright\n' ;;
+    21)  printf 'left-top\nright\nleft-bottom\n' ;;
     13)  printf 'left\nright-top\nright-mid\nright-bottom\n' ;;
-    31)  printf 'left-top\nleft-mid\nleft-bottom\nright\n' ;;
+    31)  printf 'left-top\nright\nleft-mid\nleft-bottom\n' ;;
     22)  printf 'left-top\nright-top\nleft-bottom\nright-bottom\n' ;;
     111) printf 'left\nmiddle\nright\n' ;;
     221) printf 'left-top\nmiddle-top\nright\nleft-bottom\nmiddle-bottom\n' ;;

@@ -143,13 +143,13 @@ kind = "hermes"
 |------|------|
 | 11   | left / right |
 | 12   | left / right-top / right-bottom |
-| 21   | left-top / left-bottom / right |
+| 21   | left-top / right / left-bottom |
 | 13   | left / right-top / right-mid / right-bottom |
-| 31   | left-top / left-mid / left-bottom / right |
-| 22   | left-top / left-bottom / right-top / right-bottom |
+| 31   | left-top / right / left-mid / left-bottom |
+| 22   | left-top / right-top / left-bottom / right-bottom |
 | 111  | left / middle / right |
-| 221  | left-top / left-bottom / middle-top / middle-bottom / right |
-| 122  | left / middle-top / middle-bottom / right-top / right-bottom |
+| 221  | left-top / middle-top / right / left-bottom / middle-bottom |
+| 122  | left / middle-top / right-top / middle-bottom / right-bottom |
 
 21、31、22、221、122 的 pane 创建顺序与视觉顺序不同；脚本会把
 `workspace create` 返回的 root pane 和后续 split pane 映射到上面的视觉位置，
@@ -334,9 +334,9 @@ hopen-once.sh -l 22 -k codex:2 -k pi:2 -N codex-A -N codex-B -N pi-A -N pi-B
 - 位置参数溢出：位置参数先填 KINDS[]（按视觉顺序），剩下的当 NAMES（prepend 到现有 NAMES 前面）。这样可以一行写完：
 
 ```bash
-hopen-once.sh -l 21 pi pi codex pi-top pi-bot cd-right
-# KINDS=[pi pi codex], NAMES=[pi-top pi-bot cd-right]
-# → pi-top = 视觉位 1 (left-top)，pi-bot = 2 (left-bottom)，cd-right = 3 (right)
+hopen-once.sh -l 21 pi pi codex pi-top pi-right cd-bottom
+# KINDS=[pi pi codex], NAMES=[pi-top pi-right cd-bottom]
+# → pi-top = 视觉位 1 (left-top)，pi-right = 2 (right)，cd-bottom = 3 (left-bottom)
 
 hopen-once.sh -l 22 -k codex:4 A B C D
 # KINDS=[codex×4], NAMES=[A B C D]
@@ -372,9 +372,9 @@ w4Y:p3  label=right-bottom   ← 兜底
 |---|---|
 | 11  | left → right |
 | 12  | left → right-top → right-bottom |
-| 21  | left-top → left-bottom → right |
+| 21  | left-top → right → left-bottom |
 | 13  | left → right-top → right-mid → right-bottom |
-| 31  | left-top → left-mid → left-bottom → right |
+| 31  | left-top → right → left-mid → left-bottom |
 | 22  | left-top → right-top → left-bottom → right-bottom |
 | 111 | left → middle → right |
 | 221 | left-top → middle-top → right → left-bottom → middle-bottom |

@@ -440,6 +440,136 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         self.assertIn("initial prompt failed", body)
         self.assertEqual(notifications[0][notifications[0].index("--sound") + 1], "request")
 
+    # --- issue #9: 21 / 31 must place kinds in (y, x) visual order, not
+    # _h_row_major's old left-column-first order. The numbered switcher
+    # (prefix+N) and the smoke matrix already agree on this order; this
+    # test pins the script dispatcher to the same contract.
+    #
+    # 21 layout split order (from hopen.sh):
+    #   p1 = left-top (root), p2 = right (split right from p1),
+    #   p3 = left-bottom (split down from p1).
+    # Visual (y, x) order: left-top (p1) → right (p2) → left-bottom (p3).
+    def test_layout_21_dispatches_in_visual_order_not_creation_order(self):
+        result = self.run_launcher(
+            HOPEN_ONCE,
+            "-l",
+            "21",
+            "codex",
+            "pi",
+            "claude",
+            FAKE_WORKSPACE_ID="w-21v",
+        )
+
+        calls = self.read_calls()
+        starts = self.calls_for(calls, "agent", "start")
+        target_panes = [call[call.index("--pane") + 1] for call in starts]
+        names = [call[2] for call in starts]
+
+        self.assertEqual(result.returncode, 0)
+        # kind 1 (codex) → visual 1 (left-top) → pane p1
+        # kind 2 (pi)    → visual 2 (right)    → pane p2
+        # kind 3 (claude)→ visual 3 (left-bottom)→ pane p3
+        self.assertEqual(
+            target_panes,
+            ["w-21v:p1", "w-21v:p2", "w-21v:p3"],
+        )
+        self.assertEqual(
+            names,
+            [
+                "hopen-w-21v-left-top",
+                "hopen-w-21v-right",
+                "hopen-w-21v-left-bottom",
+            ],
+        )
+
+    # 31 layout split order (from hopen.sh):
+    #   p1 = left-top (root), p2 = right (split right from p1),
+    #   p3 = left-mid (split down from p1), p4 = left-bottom (split down from p3).
+    # Visual (y, x) order: left-top (p1) → right (p2) → left-mid (p3) → left-bottom (p4).
+    def test_layout_31_dispatches_in_visual_order_not_creation_order(self):
+        result = self.run_launcher(
+            HOPEN_ONCE,
+            "-l",
+            "31",
+            "codex",
+            "pi",
+            "claude",
+            "hermes",
+            FAKE_WORKSPACE_ID="w-31v",
+        )
+
+        calls = self.read_calls()
+        starts = self.calls_for(calls, "agent", "start")
+        target_panes = [call[call.index("--pane") + 1] for call in starts]
+        names = [call[2] for call in starts]
+
+        self.assertEqual(result.returncode, 0)
+        self.assertEqual(
+            target_panes,
+            ["w-31v:p1", "w-31v:p2", "w-31v:p3", "w-31v:p4"],
+        )
+        self.assertEqual(
+            names,
+            [
+                "hopen-w-31v-left-top",
+                "hopen-w-31v-right",
+                "hopen-w-31v-left-mid",
+                "hopen-w-31v-left-bottom",
+            ],
+        )
+
+    # 21 layout with 3 kinds + 3 overflow names. The positional args after
+    # the kinds are prepended to NAMES and mapped to visual positions.
+    # A→visual 1 (left-top)=p1, B→visual 2 (right)=p2, C→visual 3 (left-bottom)=p3.
+    def test_positional_overflow_lands_names_on_visual_positions_for_21(self):
+        result = self.run_launcher(
+            HOPEN_ONCE,
+            "-l",
+            "21",
+            "pi",
+            "pi",
+            "codex",
+            "A",
+            "B",
+            "C",
+            FAKE_WORKSPACE_ID="w-21o",
+        )
+
+        calls = self.read_calls()
+        starts = self.calls_for(calls, "agent", "start")
+        target_panes = [call[call.index("--pane") + 1] for call in starts]
+        names = [call[2] for call in starts]
+        # `pane rename` carries the literal (pane_id, new_label) pair; this
+        # is what proves A/B/C truly landed on visual positions 1/2/3
+        # (left-top / right / left-bottom) rather than just changing the
+        # agent's agent-name string.
+        renames = [(call[2], call[3]) for call in self.calls_for(calls, "pane", "rename")]
+
+        self.assertEqual(result.returncode, 0)
+        # A/B/C land on visual positions 1/2/3 → panes p1/p2/p3.
+        # The kind binding is unchanged (pi/pi/codex); what changes is which
+        # pane each kind's agent occupies.
+        self.assertEqual(
+            target_panes,
+            ["w-21o:p1", "w-21o:p2", "w-21o:p3"],
+        )
+        self.assertEqual(
+            names,
+            [
+                "hopen-w-21o-left-top",
+                "hopen-w-21o-right",
+                "hopen-w-21o-left-bottom",
+            ],
+        )
+        self.assertEqual(
+            renames,
+            [
+                ("w-21o:p1", "A"),
+                ("w-21o:p2", "B"),
+                ("w-21o:p3", "C"),
+            ],
+        )
+
 
 if __name__ == "__main__":
     unittest.main()
