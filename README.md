@@ -189,12 +189,13 @@ cd ~/playground/herdr-recipes
 `install.sh` does the following, in order:
 
 1. Symlinks `~/.config/herdr/scripts/` → `<repo>/scripts/`. If a `scripts/` directory already exists, it's renamed to `scripts.bak.<timestamp>` first.
-2. Removes any pre-existing managed block (delimited by `# >>> herdr-recipes managed: begin >>>` / `# <<< ... end <<<`) from `~/.config/herdr/config.toml`.
-3. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..7`). This makes upgrading from a manual setup clean.
-4. Bootstraps `prefix = "cmd+b"` inside the `[keys]` section if no `prefix =` line is already set. Override the default via `PREFIX_DEFAULT=ctrl+b ./install.sh`.
-5. Inserts the managed block (the contents of `config/keys.toml`) inside the `[keys]` section, immediately before the next top-level section (`[experimental]`, `[ui]`, `[theme]`, …).
-6. Runs `herdr config check`, then `herdr server reload-config`.
-7. Runs the read-only agent catalog audit. Missing optional executables or integrations are warnings.
+2. Backs up `~/.config/herdr/config.toml` to `config.toml.bak.<timestamp>` (using `cp -p` to preserve permissions and mtimes). If that timestamp already exists from a same-second re-run, a `-1` / `-2` / … suffix is appended so no previous backup is overwritten.
+3. Removes any pre-existing managed block (delimited by `# >>> herdr-recipes managed: begin >>>` / `# <<< ... end <<<`) from `~/.config/herdr/config.toml`.
+4. Removes any legacy `[[keys.command]]` blocks matching the patterns this repo manages (`prefix+1..6`, `prefix+(alt|ctrl)+1..7`). This makes upgrading from a manual setup clean.
+5. Bootstraps `prefix = "cmd+b"` inside the `[keys]` section if no `prefix =` line is already set. Override the default via `PREFIX_DEFAULT=ctrl+b ./install.sh`.
+6. Inserts the managed block (the contents of `config/keys.toml`) inside the `[keys]` section, immediately before the next top-level section (`[experimental]`, `[ui]`, `[theme]`, …).
+7. Runs `herdr config check`, then `herdr server reload-config`.
+8. Runs the read-only agent catalog audit. Missing optional executables or integrations are warnings.
 
 After install, the new key bindings are live in your running herdr session.
 
@@ -215,7 +216,7 @@ cd ~/playground/herdr-recipes
 ./install.sh --uninstall
 ```
 
-This removes the managed key block, unlinks `scripts/` (only if it still points at this repo), and reloads the herdr config. Files previously backed up to `scripts.bak.<timestamp>` are not touched.
+This first backs up `~/.config/herdr/config.toml` to `config.toml.bak.<timestamp>` (same naming rule as install), then removes the managed key block, unlinks `scripts/` (only if it still points at this repo), and reloads the herdr config. Files previously backed up to `scripts.bak.<timestamp>` and `config.toml.bak.<timestamp>` are not touched.
 
 ## Customize
 

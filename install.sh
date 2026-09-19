@@ -42,6 +42,36 @@ say()  { printf '\033[1;34m[herdr-recipes]\033[0m %s\n' "$*"; }
 warn() { printf '\033[1;33m[herdr-recipes]\033[0m %s\n' "$*" >&2; }
 die()  { printf '\033[1;31m[herdr-recipes]\033[0m %s\n' "$*" >&2; exit 1; }
 
+# Back up an existing file before we modify it in place, preserving
+# perms and timestamps. Uses the same `.bak.YYYYMMDDHHMMSS` naming
+# convention as the scripts/ backup further below. Always fires on
+# install and uninstall when the target exists, even when the next step
+# would not change the file (e.g. uninstall with no managed block to
+# strip, or install with nothing to upgrade), so re-running produces an
+# additional timestamped copy. If the timestamp collides with an existing
+# backup (same-second repeat), a `-1` / `-2` / ... suffix is appended so
+# no previous backup is overwritten. Exits non-zero only if cp fails
+# (the write never happens).
+backup_if_exists() {
+  local target="$1"
+  if [ -f "$target" ]; then
+    local ts backup n
+    ts="$(date +%Y%m%d%H%M%S)"
+    backup="${target}.bak.${ts}"
+    # Same-second re-runs would otherwise overwrite the prior backup.
+    # Probe with `-1`, `-2`, ... until an unused name is found.
+    n=1
+    while [ -e "$backup" ]; do
+      backup="${target}.bak.${ts}-${n}"
+      n=$((n + 1))
+    done
+    if ! cp -p "$target" "$backup"; then
+      die "failed to back up $target to $backup"
+    fi
+    say "backed up $target → $backup"
+  fi
+}
+
 # ── Parse flags ────────────────────────────────────────────────────
 ACTION="install"
 while [ $# -gt 0 ]; do
@@ -81,6 +111,7 @@ if [ "$ACTION" = "uninstall" ]; then
   else
     warn "scripts/ is not our symlink — leaving it alone"
   fi
+  backup_if_exists "$CONFIG_DST"
   python3 - "$CONFIG_DST" "$MARKER_BEGIN" "$MARKER_END" <<'PYEOF'
 import re, sys, pathlib
 path, begin, end = sys.argv[1], sys.argv[2], sys.argv[3]
@@ -128,6 +159,7 @@ fi
 #   2. strip legacy [[keys.command]] blocks whose key matches our patterns
 #   3. bootstrap prefix = "<default>" inside [keys] if none present
 #   4. insert managed block inside [keys], before any other top-level section
+backup_if_exists "$CONFIG_DST"
 python3 - "$CONFIG_DST" "$CONFIG_SRC" "$MARKER_BEGIN" "$MARKER_END" "$PREFIX_DEFAULT" <<'PYEOF'
 import re, sys, pathlib
 cfg, src, begin, end, default_prefix = sys.argv[1:6]

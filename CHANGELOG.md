@@ -9,6 +9,14 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **installer 在原地写 `config.toml` 之前会创建 `.bak.YYYYMMDDHHMMSS` 备份**。
+  install 与 uninstall 两条路径都先备份；用 `cp -p` 保留权限与时间戳。
+  同一秒内重复运行时备份名追加 `-1` / `-2` 后缀，不覆盖历史备份。
+  与现有 `scripts/` 目录备份使用同一命名约定，用户已有的非 managed 内容不再
+  有被无声覆盖的风险。关闭 `docs/herdr-research.md` 第 160 行记录的备份风险。
+
 ## [0.6.0] - 19-09-2026
 
 ### 新增

@@ -236,6 +236,115 @@ class InstallerAuditTests(AgentAuditTests):
         self.assertIn("too old", result.stderr)
         self.assertFalse((herdr_home / "scripts").exists())
         self.assertEqual(config.read_text(), "[keys]\nprefix = \"cmd+b\"\n")
+        # Version gate runs before backup_if_exists; rejection must not
+        # create any .bak side-effect on the isolated herdr home.
+        self.assertEqual(list(herdr_home.glob("config.toml.bak.*")), [])
+
+    def run_uninstall(self, herdr_home):
+        root = pathlib.Path(self.temp_dir.name)
+        environment = self.environment.copy()
+        environment.update(
+            {
+                "HOME": str(root / "home"),
+                "HERDR_HOME": str(herdr_home),
+                "FAKE_HERDR_VERSION": "herdr 0.8.2",
+                "FAKE_HERDR_HELP": "[possible values: cursor, pi]",
+                "FAKE_HERDR_INTEGRATIONS": "cursor: not installed (/tmp/cursor)\npi: current (v8) (/tmp/pi)\n",
+            }
+        )
+        result = subprocess.run(
+            ["bash", str(REPO_ROOT / "install.sh"), "--uninstall"],
+            cwd=REPO_ROOT,
+            env=environment,
+            capture_output=True,
+            text=True,
+        )
+        return result, herdr_home
+
+    def test_install_creates_config_toml_backup_equal_to_pre_install_content(self):
+        # Pre-populate the isolated config with user-authored content that
+        # includes a managed block reference plus a user binding that must
+        # survive install. The backup taken by install must capture this
+        # exact byte-for-byte content.
+        original_content = (
+            "[keys]\n"
+            "prefix = \"cmd+b\"\n"
+            "\n"
+            "[[keys.command]]\n"
+            "key = \"prefix+1\"\n"
+            'command = "cd recipes"\n'
+        )
+        _, herdr_home, config = self.run_install()  # scaffold isolated home
+        config.write_text(original_content)
+
+        result, herdr_home, config = self.run_install()
+
+        self.assertEqual(result.returncode, 0, result.stderr)
+        matching = [
+            b for b in herdr_home.glob("config.toml.bak.*")
+            if b.read_text() == original_content
+        ]
+        self.assertEqual(
+            len(matching), 1,
+            f"expected exactly one backup matching pre-install content; got {[b.name for b in matching]}",
+        )
+
+    def test_uninstall_creates_config_toml_backup_equal_to_pre_uninstall_content(self):
+        # Install first so the config carries a managed block; that is the
+        # state uninstall will see and must back up before stripping.
+        install_result, herdr_home, config = self.run_install()
+        self.assertEqual(install_result.returncode, 0, install_result.stderr)
+        pre_uninstall_content = config.read_text()
+        self.assertIn("herdr-recipes managed: begin", pre_uninstall_content)
+
+        uninstall_result, herdr_home = self.run_uninstall(herdr_home)
+
+        self.assertEqual(uninstall_result.returncode, 0, uninstall_result.stderr)
+        matching = [
+            b for b in herdr_home.glob("config.toml.bak.*")
+            if b.read_text() == pre_uninstall_content
+        ]
+        self.assertEqual(
+            len(matching), 1,
+            f"expected exactly one backup matching pre-uninstall content; got {[b.name for b in matching]}",
+        )
+
+    def test_install_does_not_overwrite_previous_backup_when_called_twice_in_same_second(self):
+        # Two installs in the same wall-clock second must not collide on
+        # the backup name; the first backup (containing the original
+        # user content) must survive even if its timestamp matches the
+        # second run.
+        original_content = (
+            "[keys]\n"
+            "prefix = \"cmd+b\"\n"
+            "[[keys.command]]\n"
+            "key = \"prefix+1\"\n"
+            'command = "cd recipes"\n'
+        )
+        _, herdr_home, config = self.run_install()  # scaffold isolated home
+        config.write_text(original_content)
+        # Drop the scaffold-run's own backup so this test sees exactly the
+        # two backups produced by the two same-second installs below.
+        for leftover in herdr_home.glob("config.toml.bak.*"):
+            leftover.unlink()
+
+        first, herdr_home, config = self.run_install()
+        second, herdr_home, config = self.run_install()
+
+        self.assertEqual(first.returncode, 0, first.stderr)
+        self.assertEqual(second.returncode, 0, second.stderr)
+        backups = sorted(herdr_home.glob("config.toml.bak.*"), key=lambda p: p.name)
+        self.assertEqual(
+            len(backups), 2,
+            f"expected exactly two backups; got {[b.name for b in backups]}",
+        )
+        # The first backup (lexicographic name order keeps the un-suffixed
+        # one first) must still hold the original user content. If
+        # backup_if_exists had silently overwritten it, this would fail.
+        self.assertEqual(backups[0].read_text(), original_content)
+        # The second backup captures the post-install state (original
+        # plus the newly written managed block), so it must differ.
+        self.assertNotEqual(backups[1].read_text(), original_content)
 
 
 if __name__ == "__main__":
