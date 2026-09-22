@@ -9,11 +9,12 @@
 
 ## [Unreleased]
 
+## [0.7.0] - 20-09-2026
+
 ### 新增
 
 - **`prefix+alt+8` / `prefix+alt+9` 与对应的 `prefix+ctrl+8/9`（带 `--no-agents`）
-  分别绑到 `hopen.sh 221` / `hopen.sh 122`**（归下一个 minor **0.7.0**，不是
-  v0.6.x patch）。`prefix+alt+1..9` 依次打开 `12 21 22 13 31 111 11 221 122`，
+  分别绑到 `hopen.sh 221` / `hopen.sh 122`**。`prefix+alt+1..9` 依次打开 `12 21 22 13 31 111 11 221 122`，
   `prefix+ctrl+1..9` 同样代号但起 bare pane，`prefix+1..6` 仍走
   `herdr-pane-switch.py`。`config/keys.toml`、`install.sh` 的 `legacy_keys`
   正则、`README.md`、`scripts/README.md`、`scripts/hopen.sh` 的对应行已同步
