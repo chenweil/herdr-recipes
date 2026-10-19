@@ -21,6 +21,9 @@ from a workflow scheduler.
 
 ## Consequences
 
+ADR-0002 clarifies that an optional conversational coordinator role may operate Herdr on the
+user's behalf; the repository still does not implement a Workflow runtime or own its lifecycle.
+
 - A successful **Recipe Ready** notification reports setup and dispatch success, not completed agent work.
 - Initial prompts are submitted without waiting for the corresponding work to finish.
 - Workflow integrations begin as documentation-only composition examples and add runtime code only after a concrete unmet need is recorded.

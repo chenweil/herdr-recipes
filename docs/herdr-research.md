@@ -537,3 +537,50 @@ python3 tests/smoke_hstatus.py --binary /path/to/herdr --output /tmp/hstatus-smo
 
 运行态使用普通 shell pane，没有为验证启动真实模型 agent。混合 agent kind/name/status
 由 fixture 验证，未把模拟状态当作真实模型运行结果。
+
+
+## 9. 对话式协调 hteam（2026-10-19，issue #15，Unreleased）
+
+用户选择“主 agent 开 pane、派任务、查看并汇总结果；不增加后台任务引擎”。
+ADR-0002 区分交互协调角色与仓库拥有的 Workflow runtime，ADR-0001 的生命周期
+边界继续保留。hteam.sh 启动一个新 workspace/tab 中的主 agent，注入可读模板与
+精确 workspace/tab/pane ID、cwd、名称和现有工具路径。worker 由主对话按需准备
+或复用，支持先待命、后委托；启动器没有固定 worker 数量。
+
+### 自动化与原生 CLI 验证
+
+- 新增 6 项 fixture 测试，验证单 pane bootstrap、精确上下文、无任务时等待、
+  alias/path/初始请求、no-focus、唯一名称、参数/help/version、不支持的 kind、
+  workspace 创建或提示词失败保留现场以及通知/输出契约。
+- 全量 83 项通过，59.291 秒；Bash syntax、Python compileall、diff check 和实际
+  安装软链的 help/version 通过。
+- 官方 Herdr 0.8.2 与本机 0.9.5 各自在独立 server 用不支持的 kind 验证原生
+  bootstrap 与失败保留：仅一个 pane、没有 agent、exit 1 且现场可查询，随后清理。
+  这验证 CLI 边界，**不等同于 0.8.2 上的完整模型协作验证**。
+
+### 真实模型链路
+
+在独立 Herdr 0.9.5 server，使用实际 pi 协调者与 pi worker：
+
+1. 通过 hteam.sh 发送“准备一个 pi worker、仅角色说明与待命”的第一条请求。
+2. 主 agent 自行调用 Herdr CLI，在自己的 tab 右侧创建 worker pane、命名并启动
+   worker。hteam 启动器本身未创建 worker；复跑核对主 pane 保留左侧 50%。
+3. 看到 worker 待命后，再向主 agent 发送第二条请求：将十九乘二十三委托给 worker。
+4. worker 实际输出 `TEAM_PROBE_RESULT: 437`，主 agent 读取后实际输出
+   `TEAM_SUMMARY: 437`。请求中未直接包含计算结果，避免把回显当完成证据。
+5. 核对只有这一个 workspace、同 tab 的两个 pane；关闭临时 workspace 和 server。
+
+运行中发现：agent read 的 recent 滚动历史在 working 状态可能返回 agent_not_idle；
+模板已加入工作中 `--source visible`、空闲后再读 recent 的规则，不能把读历史失败
+当作任务失败。也不把状态 idle/done 当作任务验收。
+
+可复用 smoke 会调用真实模型，需显式选择（默认不会执行）：
+
+```bash
+python3 tests/smoke_hteam.py --live-agents --binary /path/to/herdr --output /tmp/hteam-smoke.json
+```
+
+该 smoke 默认以 pi 协调者、pi worker 验证，支持 --kind 指定协调者。完整模型链路
+当前实测是 pi/pi + Herdr 0.9.5；默认 codex 的启动参数与角色注入由 fixture 覆盖，
+未宣称所有 kind 或四 worker 四宫格的模型行为都已完成实测。模板的 tab 范围与布局
+是对交互 agent 的约束，不是操作系统级权限隔离或确定性的后台调度规则。

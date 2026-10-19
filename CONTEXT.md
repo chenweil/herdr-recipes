@@ -23,3 +23,9 @@ _Avoid_: Task complete, workflow complete, agents done
 **Workflow**:
 A sequence or graph of work that owns completion criteria, dependencies, waiting, retries, recovery, and result collection.
 _Avoid_: Recipe, layout
+
+**Conversational Coordinator**:
+An optional interactive agent in the main pane that uses Herdr on the user's behalf to prepare
+workers, delegate work, inspect evidence and summarize results during the conversation.
+It is not a repository-owned background scheduler or a persistent Workflow runtime.
+_Avoid_: Workflow engine, daemon

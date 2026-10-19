@@ -49,6 +49,8 @@ FAKE_HERDR = textwrap.dedent(
     if args[:2] == ["tab", "list"]:
         respond({"result": {"tabs": []}})
     if args[:2] == ["workspace", "create"]:
+        if os.environ.get("FAKE_FAIL_WORKSPACE_CREATE") == "1":
+            respond({"error": {"code": "workspace_create_failed"}}, 1)
         workspace = os.environ.get("FAKE_WORKSPACE_ID", "w-test")
         save_lifecycle({"workspace_exists": True, "panes": [workspace + ":p1"]})
         respond(
@@ -159,6 +161,7 @@ class FakeHerdrLauncherFixture:
                 "FAKE_FAIL_SPLIT_AT": "",
                 "FAKE_FAIL_WORKSPACE_CLOSE": "",
                 "FAKE_FAIL_PANE_CLOSE": "",
+                "FAKE_FAIL_WORKSPACE_CREATE": "",
                 "HOPEN_CONF": str(self.conf_path),
             }
         )

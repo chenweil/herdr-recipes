@@ -20,6 +20,7 @@
 | §4.1 / §4.2 / §4.5 | layout 抽表、alias 运行时读取、冲突检测尚未实现 |
 | §3.2 / §3.3 / §3.5 | hook、sidebar、.hopenrc 均为候选，尚未评审 |
 | §3.4 hclean | 与 ADR-0001 排除 cleanup 的边界冲突，需先决策，暂不实施 |
+| 对话式协调 hteam | 已实现并验证（#15，ADR-0002，Unreleased）；pi/pi 实测先待命、后委托与汇总 |
 | §3.6 / §3.7 | PR followup 暂缓；Spec → Tickets 不做 |
 
 本文不重述 ADR-0001 已确立的边界（Recipe Launcher ≠ Workflow Engine），也不重复 `herdr-research.md` 的事实记录。所有建议在此前提下提出。
@@ -49,7 +50,7 @@
 |---|---|---|
 | Sidebar row（`$hp_state` / `$hp_activity` / `$hp`）| 仅改 herdr config，不触碰 workspace 生命周期 | **可吸收**（小工作量，install.sh 加 managed block 即可）|
 | Progress hook（Claude Code / Codex）| agent 自报进度到 herdr，Recipe 边界内 | **可吸收**（给 pi / opencode 移植等价 hook）|
-| Coordinator agent 中转调度 | 等价于 workflow engine | **不吸收**（违反 ADR-0001）|
+| Coordinator agent 中转调度 | 需区分交互式角色与后台 Workflow runtime | **可提供对话式协调**（#15 / ADR-0002）；后台任务引擎仍不吸收 |
 | Worktree + 分支隔离 | 假设每个 thread 独立 PR | **不吸收**（与"同一分支多 agent 协作"习惯冲突）|
 | PR followup routine | CI 失败自动回给对应 pane | **边界评估**（需要先确定"同一 PR / 多 pane"语义）|
 | `machine list` + 跨机器 workspace | herdr 已有原生 `--machine` | **不封装**（CLI 够用，二次封装会变成 herdr 的影子）|
@@ -404,7 +405,8 @@ docs/
 2. 已完成：同步事实、候选状态、版本与 Changelog，保留历史证据。
 3. 已发布：[v0.8.0](https://github.com/chenweil/herdr-recipes/releases/tag/v0.8.0)，记录验证范围。
 4. 已实现并验证：[#14](https://github.com/chenweil/herdr-recipes/issues/14) 的只读 `hstatus` 摘要与 JSON，列入 Unreleased。
-5. layout 抽表、alias 运行时读取和 installer 冲突检测按具体需求再立项。
+5. 已实现并验证：hteam 对话式协调入口（#15，ADR-0002），主对话动态准备 worker、后续委托与汇总，不加入后台任务引擎。
+6. layout 抽表、alias 运行时读取和 installer 冲突检测按具体需求再立项。
 
 hook / sidebar / `.hopenrc` 仍是候选；`hclean` 先解决 ADR 边界，PR followup 暂缓。
 

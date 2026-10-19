@@ -11,6 +11,10 @@
 
 ### 新增
 
+- **`hteam.sh` 对话式协调入口**（#15，ADR-0002）：仅启动一个主 agent，注入可读
+  的协调模板与精确 tab 上下文；主对话决定 worker 数量、布局、待命准备和后续
+  提示词委托，并查看与汇总结果。脚本不引入后台队列、自动重试或恢复引擎。
+
 - **`hstatus.sh` 只读 workspace 状态摘要**（#14）：支持调用方上下文、显式
   `--workspace`、文本与 `schema_version=1` JSON；包含普通 shell pane，按精确 ID
   联接一次 agent 查询，缺失字段为 null/unknown。几何完整时按 `(y,x)` 排序，

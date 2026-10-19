@@ -8,6 +8,8 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 |---|---|
 | `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`, `221`, `122`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
+| `scripts/hteam.sh` | Start one conversational coordinator that prepares workers and delegates through Herdr |
+| `scripts/coordinator-prompt.md` | Inspectable instructions for worker preparation, later delegation and evidence-based summaries |
 | `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
@@ -33,6 +35,30 @@ scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.8.0
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
 reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## Conversational team (`hteam.sh`)
+
+Start one main agent, then tell it what you need:
+
+```bash
+bash scripts/hteam.sh                         # default coordinator: codex
+bash scripts/hteam.sh -k pi                    # use pi as the coordinator
+bash scripts/hteam.sh -p "先准备两个 codex 和一个 pi，暂时不要工作"
+bash scripts/hteam.sh -C /path/to/project -p "拆分登录功能，安排实现、测试和审查"
+```
+
+Talk to the main pane afterward: “把登录实现交给第一个 worker，第二个补测试”，
+then “汇总进度和验证结果”. The coordinator can prepare idle workers first and delegate
+later, choosing how many panes to open or reuse in the same tab. The main pane keeps
+the left half when workers are added; workers share the right half.
+
+The launcher bootstraps one coordinator only. Worker management is performed by the
+interactive agent under [the coordinator instructions](scripts/coordinator-prompt.md),
+with exact workspace/tab context. No background queue, automatic retries or task recovery
+is added. Startup success is Recipe Ready, not completion of the delegated work.
+See [ADR-0002](docs/adr/0002-conversational-coordinator.md). The pi-coordinator/pi-worker
+standby → later delegation → result summary flow was verified on Herdr 0.9.5;
+other agent kinds remain subject to their tool and approval configuration.
 
 ## Workspace status (`hstatus.sh`)
 

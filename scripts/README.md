@@ -41,6 +41,50 @@ python3 scripts/agent-audit.py
 session socket。布局响应、focus 响应、socket 错误和越界索引都会以可见的非零
 错误返回。
 
+## hteam.sh — 对话式协调入口
+
+```bash
+hteam.sh                          # 新 workspace/tab 中只启动一个 codex 协调者
+hteam.sh -k pi                     # 换协调者 kind，支持现有 alias
+hteam.sh -p "先准备两个 codex 和一个 pi，暂时不要工作"
+hteam.sh -C /path/to/project -p "拆分登录功能，安排实现与审查"
+hteam.sh --no-focus                # 准备后不切换用户当前焦点
+```
+
+启动后只和主 pane 对话，例如：
+
+1. “先开两个 codex，分别做实现和测试，先待命。”
+2. “实现 worker 处理登录接口；测试 worker 先阅读需求，等实现后补测试。”
+3. “再准备一个 pi 做审查。”
+4. “汇总各任务的改动、实际验证和阻塞项。”
+
+用户无需手工组织 `-k/-p` 或记 pane ID。协调者根据对话决定 worker 数量、复用和
+任务提示词；既可立即委托，也可先启动 agent 待命，稍后再分配任务。已有 hopen /
+固定布局入口继续可用。
+
+启动器只创建一个 workspace、一个 tab 和一个协调 pane，通过共用 `_start_agent`
+注入 `coordinator-prompt.md`、精确 workspace/tab/pane ID、cwd 和工具路径。默认
+没有工作任务，协调者应等待用户，不自行创建 worker。新增 worker 由协调者使用
+Herdr CLI 在同 tab 的右半区完成；主 pane 保留左半区，四个 worker 时优先上二下二。
+这类布局和派工是模型遵循模板的行为，不是 shell 中的确定性调度规则或权限隔离。
+
+模板可直接阅读和修改。它要求每次委托携带任务 ID、目标、文件范围、交付与验证
+要求；共享 working tree 中协调不重叠的写入范围。协调者通过 `agent read/get` 和
+实际交付查看结果，不以 idle/done 或 `prompt --wait` 代替某项任务验收。`hstatus`
+是只读状态来源；精确 tab 范围还需从 pane list 的 tab_id 核对。
+
+启动输出为一行 `ws=... panes=... coordinator=...`，仅包含刚启动的主 pane。
+正常发一次 Recipe Ready；agent 启动或角色提示词提交失败时发 request 通知、
+exit 1，保留 workspace 供检查，并在 stderr 标出 ID；创建前的参数错误 exit 2。
+`--help` 与 `-v/-V/--version` 不创建资源。安装软链会直接包含新入口，无需改用户配置。
+
+真实 pi 协调者 / pi worker 已在 Herdr 0.9.5 验证“先待命 → 后委托 → 读取并汇总”。
+完整链路可用 `tests/smoke_hteam.py --live-agents` 显式复验，会调用真实模型；
+其它 kind 和四 worker 布局尚未完成模型行为实测，详见 research §9。
+
+本入口不引入后台 worker 服务、持久化任务队列、自动重试或断线恢复；交互模型是否
+能使用终端工具和是否需要批准，仍取决于该 agent 的实际配置。决策见 ADR-0002。
+
 ## hstatus.sh — 只读 workspace 状态摘要
 
 ```bash
