@@ -288,52 +288,45 @@ _position_for() {
   esac
 }
 
-# 读 conf：layout.LAYOUT.panes.POS.kind
-# 返回：echo 出 kind 字符串，没配则 echo 空
+# 从 conf 读 layout.LAYOUT.panes.POS 的指定 key 的值。
+# 共享给 _kind_for / _prompt_for / _pane_name_for 三个函数。
 #
-# 解析策略：conf 格式是固定的 `[layout.XX.panes.Y]`（裸标识符，无引号） + `key = "val"`。
-# 这不是通用 TOML 解析器，具体假设是：
-#   - section header 必须从第 1 列开始，且精确匹配上述格式；
-#   - kind/prompt 必须是单行、从第 1 列开始的双引号字符串；不处理多行字符串、
-#     TOML 转义或值中的双引号；
-#   - 用下一个从第 1 列开始的 `[` header 作为 section 边界，只取边界前第一个匹配键；
-#     section 在文件中的全局顺序不敏感，普通字段在 kind/prompt 前面也不会影响匹配；
-#     但嵌套表 header 会提前结束搜索范围。
-# 直接 grep + sed 解析，避开 tomlq 依赖；扩展 conf 格式必须同步修改这里。
-_kind_for() {
-  local layout="$1" pos="$2"
+# Conf 格式假设（不是通用 TOML 解析器）：
+#   - section header 必须从第 1 列开始，且精确匹配 `[layout.${layout}.panes.${pos}]`；
+#   - key 必须是单行、从第 1 列开始的双引号字符串；
+#   - 不处理多行字符串、TOML 转义或值中的双引号——值用 `([^"]*)` 提取，遇到
+#     第一个 `"` 即截断；
+#   - 用下一个从第 1 列开始的 `[` header 作为 section 边界。
+# 直接 sed + grep 解析，避开 tomlq 依赖；扩展 conf 格式必须同步修改这里。
+#
+# 用法：_read_section_key <layout> <pos> <key>
+# 返回：echo 出 value 字符串；文件缺失或未配则 echo 空。
+_read_section_key() {
+  local layout="$1" pos="$2" key="$3"
   [ ! -f "$HOPEN_CONF" ] && return 0
-  # 在匹配 section 之后取下一个 kind 行
+  # 在匹配 section 之后取下一个匹配 key 的行
   # set -e + pipefail 下 grep 无匹配会退出 1 → 必须 || true 包住
-  sed -n "/^\[layout\.${layout}\.panes\.${pos}\]\$/,/^\[/p" "$HOPEN_CONF" 2>/dev/null \
-    | { grep -m1 '^kind[[:space:]]*=' 2>/dev/null || true; } \
-    | sed -E 's/^kind[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/' 2>/dev/null \
+  sed -n '/^\[layout\.'"${layout}"'\.panes\.'"${pos}"'\]$/,/^\[/p' "$HOPEN_CONF" 2>/dev/null \
+    | { grep -m1 '^'"${key}"'[[:space:]]*=' 2>/dev/null || true; } \
+    | sed -E 's/^'"${key}"'[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/' 2>/dev/null \
     || true
 }
 
+_kind_for() {
+  _read_section_key "$1" "$2" "kind"
+}
+
 _prompt_for() {
-  local layout="$1" pos="$2"
-  [ ! -f "$HOPEN_CONF" ] && return 0
-  sed -n "/^\[layout\.${layout}\.panes\.${pos}\]\$/,/^\[/p" "$HOPEN_CONF" 2>/dev/null \
-    | { grep -m1 '^prompt[[:space:]]*=' 2>/dev/null || true; } \
-    | sed -E 's/^prompt[[:space:]]*=[[:space:]]*"(.*)"$/\1/' 2>/dev/null \
-    || true
+  _read_section_key "$1" "$2" "prompt"
 }
 
 # 读 conf：layout.LAYOUT.panes.POS.pane_name
 # 返回：echo 出 pane name 字符串。没配或配为空串都回退到 $pos（位置名本身），
 # 作为默认 pane label。这样 hopen() 总是会填 pane_names，不会留空行。
 _pane_name_for() {
-  local layout="$1" pos="$2"
-  local name=""
-  if [ -f "$HOPEN_CONF" ]; then
-    name=$(sed -n "/^\[layout\.${layout}\.panes\.${pos}\]\$/,/^\[/p" "$HOPEN_CONF" 2>/dev/null \
-      | { grep -m1 '^pane_name[[:space:]]*=' 2>/dev/null || true; } \
-      | sed -E 's/^pane_name[[:space:]]*=[[:space:]]*"([^"]*)".*/\1/' 2>/dev/null) || name=""
-  fi
-  if [ -z "$name" ]; then
-    name="$pos"
-  fi
+  local name
+  name=$(_read_section_key "$1" "$2" "pane_name")
+  [ -n "$name" ] || name="$2"
   printf '%s' "$name"
 }
 

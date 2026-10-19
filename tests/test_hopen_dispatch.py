@@ -571,5 +571,266 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         )
 
 
+class LayoutVisualOrderContractTests(FakeHerdrLauncherTests):
+    """契约测试：所有 9 个 layout 的视觉位置映射和派位顺序。
+
+    每个 layout 必须满足下列契约：
+      1. 视觉位置总数 = pane 总数
+      2. 视觉位置无重复
+      3. 创建 idx 0..N-1 与视觉位置一一映射（无遗漏、无重复）
+      4. hopen-once.sh 按视觉阅读顺序派位
+      5. hopen.sh 用 conf 与 hopen-once.sh 给出相同的 kind → pane 映射
+
+    来源：pane:plan 阶段 0.1；docs/future-directions.md §4.6 测试盲点；
+          解决 CHANGELOG 0.5.0 重复映射导致的 21/31 派位 bug
+    """
+
+    # (code, pane_count, creation_positions[idx_0→name], visual_positions[(y,x)→name])
+    #
+    # creation_positions 是按 hopen.sh 的 created idx 顺序（即 _position_for 的输出）
+    # 排列的视觉位置名。visual_positions 是按 (y, x) 阅读顺序排列的视觉位置名。
+    #
+    # 22 与 122 的两者不同：hopen.sh 内部按"先抢右列再下分层"创建，但视觉
+    # 阅读时 left-bottom 应该排在 right-bottom 之前（22 同样：middle-bottom
+    # 排在 right-bottom 之前，122）。这是 0.5.0 修复的同种问题。
+    LAYOUT_CONTRACTS = [
+        (
+            "11",
+            2,
+            ["left", "right"],
+            ["left", "right"],
+        ),
+        (
+            "12",
+            3,
+            ["left", "right-top", "right-bottom"],
+            ["left", "right-top", "right-bottom"],
+        ),
+        (
+            "13",
+            4,
+            ["left", "right-top", "right-mid", "right-bottom"],
+            ["left", "right-top", "right-mid", "right-bottom"],
+        ),
+        (
+            "21",
+            3,
+            ["left-top", "right", "left-bottom"],
+            ["left-top", "right", "left-bottom"],
+        ),
+        (
+            "22",
+            4,
+            ["left-top", "right-top", "right-bottom", "left-bottom"],
+            ["left-top", "right-top", "left-bottom", "right-bottom"],
+        ),
+        (
+            "31",
+            4,
+            ["left-top", "right", "left-mid", "left-bottom"],
+            ["left-top", "right", "left-mid", "left-bottom"],
+        ),
+        (
+            "111",
+            3,
+            ["left", "middle", "right"],
+            ["left", "middle", "right"],
+        ),
+        (
+            "122",
+            5,
+            ["left", "middle-top", "right-top", "right-bottom", "middle-bottom"],
+            ["left", "middle-top", "right-top", "middle-bottom", "right-bottom"],
+        ),
+        (
+            "221",
+            5,
+            ["left-top", "middle-top", "right", "left-bottom", "middle-bottom"],
+            ["left-top", "middle-top", "right", "left-bottom", "middle-bottom"],
+        ),
+    ]
+
+    def test_layout_data_table_contract(self):
+        """LAYOUT_CONTRACTS 表本身满足视觉位置契约。
+
+        这是静态测试，先于任何 bash 脚本调用验证表数据无错；
+        防止后续修改时引入 typo 或重复。
+        """
+        for code, pane_count, creation_positions, visual_positions in self.LAYOUT_CONTRACTS:
+            with self.subTest(layout=code):
+                # 视觉位置总数 = pane 总数
+                self.assertEqual(
+                    len(visual_positions),
+                    pane_count,
+                    msg=f"{code}: 视觉位置数 ({len(visual_positions)}) ≠ pane 总数 ({pane_count})",
+                )
+                # 创建位置总数 = pane 总数
+                self.assertEqual(
+                    len(creation_positions),
+                    pane_count,
+                    msg=f"{code}: 创建位置数 ({len(creation_positions)}) ≠ pane 总数 ({pane_count})",
+                )
+                # 视觉位置无重复
+                self.assertEqual(
+                    len(set(visual_positions)),
+                    pane_count,
+                    msg=f"{code}: 视觉位置有重复: {visual_positions}",
+                )
+                # 创建位置无重复
+                self.assertEqual(
+                    len(set(creation_positions)),
+                    pane_count,
+                    msg=f"{code}: 创建位置有重复: {creation_positions}",
+                )
+                # 创建位置与视觉位置集合相等
+                self.assertEqual(
+                    set(creation_positions),
+                    set(visual_positions),
+                    msg=(
+                        f"{code}: 创建与视觉位置集合不一致\n"
+                        f"  creation: {set(creation_positions)}\n"
+                        f"  visual:   {set(visual_positions)}\n"
+                        f"  diff:     {set(creation_positions) ^ set(visual_positions)}"
+                    ),
+                )
+
+    def test_hopen_once_dispatch_lands_on_visual_positions_for_all_layouts(self):
+        """hopen-once.sh 按视觉阅读顺序派位（覆盖所有 9 个 layout）。
+
+        对每个 layout 跑 hopen-once.sh with K:N 个 kind，验证：
+          - 派位总数 = pane 总数
+          - agent name 按视觉位置顺序排列
+          - 派位的 pane id 集覆盖 workspace 的所有 pane
+
+        这是 hopen-once.sh 对 _position_for 反查的正确性测试：
+        _h_row_major 给出的视觉位置必须能找到 _position_for 对应的 created pane。
+        """
+        for code, pane_count, _creation, visual_positions in self.LAYOUT_CONTRACTS:
+            with self.subTest(layout=code):
+                self.clear_calls()
+                ws_id = f"w-void-{code}"
+                result = self.run_launcher(
+                    HOPEN_ONCE,
+                    "-l",
+                    code,
+                    f"codex:{pane_count}",
+                    FAKE_WORKSPACE_ID=ws_id,
+                )
+                self.assertEqual(
+                    result.returncode,
+                    0,
+                    msg=f"{code}: hopen-once.sh 退出码 {result.returncode}\n{result.stderr}",
+                )
+
+                calls = self.read_calls()
+                starts = self.calls_for(calls, "agent", "start")
+                target_panes = [call[call.index("--pane") + 1] for call in starts]
+                names = [call[2] for call in starts]
+
+                # 派位总数 = pane 总数
+                self.assertEqual(
+                    len(starts),
+                    pane_count,
+                    msg=f"{code}: 派位 {len(starts)} 次，应为 {pane_count}",
+                )
+
+                # agent name 按视觉位置顺序排列
+                expected_names = [f"hopen-{ws_id}-{p}" for p in visual_positions]
+                self.assertEqual(
+                    names,
+                    expected_names,
+                    msg=(
+                        f"{code}: agent name 顺序不对\n"
+                        f"  expected: {expected_names}\n"
+                        f"  actual:   {names}"
+                    ),
+                )
+
+                # 派位的 pane id 集 = workspace 的所有 pane
+                expected_panes = {f"{ws_id}:p{i + 1}" for i in range(pane_count)}
+                self.assertEqual(
+                    set(target_panes),
+                    expected_panes,
+                    msg=(
+                        f"{code}: 派位 pane 集不对\n"
+                        f"  expected: {expected_panes}\n"
+                        f"  actual:   {set(target_panes)}"
+                    ),
+                )
+
+    def test_hopen_and_hopen_once_kind_to_pane_mapping_match_for_all_layouts(self):
+        """hopen.sh (conf) 与 hopen-once.sh (CLI) 给出相同的 kind → pane 映射。
+
+        这验证两个派位入口对"视觉位置 i"概念的契约一致性：
+        - hopen-once.sh 用户按视觉顺序传 KINDS[]
+        - hopen.sh 用户在 conf 里按视觉位置名写 kind
+        两种方式表达"视觉位置 i 的 kind"，最终每个 pane 分到的 kind 必须相同。
+
+        例如 layout 22：
+          - hopen-once.sh 用 [K0, K1, K2, K3] → p1=K0, p2=K1, p4=K2, p3=K3
+            （按视觉 left-top, right-top, left-bottom, right-bottom 派位）
+          - hopen.sh 用 conf [left-top=K0, right-top=K1, left-bottom=K2, right-bottom=K3]
+            → 按创建 idx 0..3 派位：p1=K0, p2=K1, p3=K3, p4=K2
+          两个 {pane: kind} 映射都给出 {p1:K0, p2:K1, p3:K3, p4:K2}
+        """
+        kinds_pool = ["codex", "pi", "claude", "hermes", "opencode"]
+
+        for code, pane_count, _creation, visual_positions in self.LAYOUT_CONTRACTS:
+            with self.subTest(layout=code):
+                # 清上次迭代的 log 与 state，避免 pane id 跨迭代错位
+                self.clear_calls()
+                kinds = [kinds_pool[i % len(kinds_pool)] for i in range(pane_count)]
+                ws_id = f"w-map-{code}"
+
+                # 跑 hopen-once.sh：kinds 按视觉顺序传
+                result_once = self.run_launcher(
+                    HOPEN_ONCE,
+                    "-l",
+                    code,
+                    *kinds,
+                    FAKE_WORKSPACE_ID=ws_id,
+                )
+                self.assertEqual(
+                    result_once.returncode,
+                    0,
+                    msg=f"{code}: hopen-once.sh 失败\n{result_once.stderr}",
+                )
+                calls_once = self.read_calls()
+                once_kind_pane = {
+                    call[call.index("--pane") + 1]: call[call.index("--kind") + 1]
+                    for call in self.calls_for(calls_once, "agent", "start")
+                }
+
+                # 清状态，准备 hopen.sh
+                self.clear_calls()
+                sections = []
+                for pos, kind in zip(visual_positions, kinds):
+                    sections.append(f'[layout.{code}.panes.{pos}]\nkind = "{kind}"')
+                self.write_conf("\n\n".join(sections))
+                result_conf = self.run_launcher(HOPEN, code, FAKE_WORKSPACE_ID=ws_id)
+                self.assertEqual(
+                    result_conf.returncode,
+                    0,
+                    msg=f"{code}: hopen.sh 失败\n{result_conf.stderr}",
+                )
+                calls_conf = self.read_calls()
+                conf_kind_pane = {
+                    call[call.index("--pane") + 1]: call[call.index("--kind") + 1]
+                    for call in self.calls_for(calls_conf, "agent", "start")
+                }
+
+                self.assertEqual(
+                    once_kind_pane,
+                    conf_kind_pane,
+                    msg=(
+                        f"{code}: kind → pane 映射两个入口不一致\n"
+                        f"  visual_positions:  {visual_positions}\n"
+                        f"  kinds:             {kinds}\n"
+                        f"  hopen-once.sh map: {once_kind_pane}\n"
+                        f"  hopen.sh map:      {conf_kind_pane}"
+                    ),
+                )
+
+
 if __name__ == "__main__":
     unittest.main()

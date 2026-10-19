@@ -208,6 +208,84 @@ Usage: herdr agent start <NAME> --kind <KIND> --pane <ID>
         self.assertIn("integration=missing (letta)", result.stdout)
 
 
+class ResolveKindCatalogSyncTests(unittest.TestCase):
+    """确认 `hopen.sh::_resolve_kind` 与 `config/agent-catalog.json::aliases` 同步。
+
+    两个表一旦不同，用户传同一会被一处解析成一种 agent，另一处
+    另一种。预期两者在所有 alias 上输出一致：catalog 是版本化的
+    唯一来源，bash 是运行时 fallback。
+    """
+
+    HOPEN_SH = REPO_ROOT / "scripts" / "hopen.sh"
+
+    def test_hopen_resolve_kind_matches_catalog_aliases(self):
+        catalog = json.loads(
+            (REPO_ROOT / "config" / "agent-catalog.json").read_text()
+        )
+        catalog_aliases = catalog["aliases"]
+
+        # 跑 bash：source hopen.sh，遍历 catalog.aliases 的所有 key，
+        # 调 _resolve_kind，输出 key=resolved_value 行
+        # 未在 alias 表里的输入走 `*) echo "$1"`，bash 不能验证这个，需另外验证
+        bash = (
+            "set -e\n"
+            f"source '{self.HOPEN_SH}'\n"
+            "{\n"
+            '  echo "EXIT_OK"\n'
+        )
+        # 实际构造 eval 安全的输入
+        quoted = []
+        for k, expected_v in catalog_aliases.items():
+            quoted.append(f'  [ "$(_resolve_kind "{k}")" = "{expected_v}" ] || {{\n'
+                          f'    echo "MISMATCH: {k}->$(_resolve_kind "{k}") expected {expected_v}"\n'
+                          '    exit 1\n'
+                          '  }\n')
+        bash_body = "set -e\n" + f"source '{self.HOPEN_SH}'\n" + "".join(quoted) + 'echo "CATALOG_SYNC_OK"\n'
+        result = subprocess.run(
+            ["bash", "-c", bash_body],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=(
+                "hopen.sh::_resolve_kind 与 catalog::aliases 不一致\n"
+                f"  aliases: {catalog_aliases}\n"
+                f"  stdout: {result.stdout}\n"
+                f"  stderr: {result.stderr}"
+            ),
+        )
+        self.assertIn("CATALOG_SYNC_OK", result.stdout)
+
+    def test_hopen_resolve_kind_passes_through_unknown(self):
+        # fallback 验证：未知输入原样透传，不取决于 catalog.aliases
+        bash = (
+            "set -e\n"
+            f"source '{self.HOPEN_SH}'\n"
+            '  [ "$(_resolve_kind "codex")" = "codex" ]\n'
+            '  [ "$(_resolve_kind "claude")" = "claude" ]\n'
+            '  [ "$(_resolve_kind "opencode")" = "opencode" ]\n'
+            '  [ "$(_resolve_kind "pi")" = "pi" ]\n'
+            '  [ "$(_resolve_kind "hermes")" = "hermes" ]\n'
+            '  [ "$(_resolve_kind "codex")" != "opencode" ]\n'
+            '  echo "PASSTHROUGH_OK"\n'
+        )
+        result = subprocess.run(
+            ["bash", "-c", bash],
+            cwd=REPO_ROOT,
+            capture_output=True,
+            text=True,
+        )
+        self.assertEqual(
+            result.returncode,
+            0,
+            msg=f"未在 alias 表里的输入应原样透传\nstdout: {result.stdout}\nstderr: {result.stderr}",
+        )
+        self.assertIn("PASSTHROUGH_OK", result.stdout)
+
+
 class InstallerAuditTests(AgentAuditTests):
     def run_install(self, version="herdr 0.8.2"):
         root = pathlib.Path(self.temp_dir.name)

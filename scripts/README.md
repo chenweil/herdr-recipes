@@ -113,6 +113,28 @@ herdr server reload-config
 - 多行字符串、TOML 转义、值中的双引号、复杂 TOML 扩展或改变上述格式，可能被当成
   未配置或解析为空；扩展 conf 格式前应先同步修改解析逻辑，不能只改配置文件。
 
+### Agent name 格式
+
+启动后的 agent 在 herdr 里有个 name（`herdr agent list` 能看到），
+由 `hopen.sh` 的 `_agent_name` 函数生成。设计原则是「可读
++ 在 herdr 32 字符限制内唯一」。
+
+完整格式：`hopen-<workspace_part>-<position_part>`
+
+- `workspace_part`：从 herdr workspace ID 推出来的低字符版本
+- `position_part`：视觉位置名（`left` / `left-top` / `middle-bottom` 等）
+- 写入字符仅为 `a-z0-9_-`，超过 32 字符会简写并加 6 位 hash 后缀
+- 例：`hopen-w42-left` / `hopen-myproj-main-right-top`
+- 长 workspace ID 例：原始拼接超过 32 字符 →
+  `hopen-billing-t-0001--a8f3c2`（前缀被截断，后 6 位是 cksum）
+
+为什么需要 hash：herdr agent name 限制 32 字符，达不到唯一性就要 hash。
+同一 workspace 里 name 仍可读、跨 workspace 也唯一，herdr 里
+`agent list` 可以一眼看出哪个 agent 属于哪个 pane。
+
+如果保留原貌查不到（被截断了），记最后 6 位 hash 就能判别。
+静默拿到唯一 name，不需要手工干预。
+
 ## hopen-agents.conf
 
 按 layout 代号配置「哪个 pane 启动哪个 agent」。`hopen.sh` 跑完布局后
