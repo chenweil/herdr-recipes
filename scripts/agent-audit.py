@@ -11,6 +11,8 @@ from pathlib import Path
 
 
 DEFAULT_CATALOG = Path(__file__).resolve().parents[1] / "config" / "agent-catalog.json"
+# catalog 缺 min_herdr_version 时的兜底；正常路径以 config/agent-catalog.json 为准。
+DEFAULT_MIN_HERDR = "0.8.2"
 VERSION_RE = re.compile(r"\b(\d+)\.(\d+)\.(\d+)")
 
 
@@ -36,7 +38,7 @@ def parse_version(text):
     return tuple(int(part) for part in match.groups()) if match else None
 
 
-def check_version(minimum):
+def check_version(minimum, recommended=None):
     result = run_command(["herdr", "--version"])
     version = parse_version(result.stdout + "\n" + result.stderr)
     required = parse_version(minimum)
@@ -50,11 +52,26 @@ def check_version(minimum):
             file=sys.stderr,
         )
         return False
+    # minimum 是契约下限（不兼容就 die），recommended 是实测推荐（低只警告）。
+    # 两者分开的原因见 docs/review-2026-10-19.md §P0-4：0.9.5 之前的中/日/韩
+    # 输入法会让 prefix 快捷键失效，而 prefix+alt/ctrl+1..9 正是本仓主入口。
+    found = ".".join(str(part) for part in version)
+    if recommended:
+        wanted = parse_version(recommended)
+        if wanted is not None and version < wanted:
+            print(
+                "[herdr-recipes] warning: Herdr %s meets the %s minimum but is below the "
+                "recommended %s; upgrade with `brew upgrade herdr` if prefix shortcuts "
+                "(prefix+alt+1..9) stop responding under a Chinese/Japanese/Korean IME"
+                % (found, minimum, recommended),
+                file=sys.stderr,
+            )
     print(
-        "[herdr-recipes] Herdr %s (minimum %s): ok"
-        % (".".join(str(part) for part in version), minimum)
+        "[herdr-recipes] Herdr %s (minimum %s%s): ok"
+        % (found, minimum, ", recommended %s" % recommended if recommended else "")
     )
     return True
+
 
 
 def parse_supported_kinds(help_text):
@@ -114,7 +131,10 @@ def integration_report(entry, statuses):
 
 
 def audit(catalog):
-    if not check_version(catalog.get("min_herdr_version", "0.8.2")):
+    if not check_version(
+        catalog.get("min_herdr_version", DEFAULT_MIN_HERDR),
+        catalog.get("recommended_herdr_version"),
+    ):
         return 2
 
     help_result = run_command(["herdr", "agent", "start", "--help"])
@@ -162,7 +182,10 @@ def main():
     try:
         catalog = load_catalog(args.catalog)
         if args.check_version:
-            return 0 if check_version(catalog.get("min_herdr_version", "0.8.2")) else 2
+            return 0 if check_version(
+                catalog.get("min_herdr_version", DEFAULT_MIN_HERDR),
+                catalog.get("recommended_herdr_version"),
+            ) else 2
         return audit(catalog)
     except RuntimeError as exc:
         print(f"[herdr-recipes] error: {exc}", file=sys.stderr)

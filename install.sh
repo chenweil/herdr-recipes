@@ -97,9 +97,12 @@ done
 command -v python3 >/dev/null 2>&1 || die "python3 not found in PATH"
 
 if [ "$ACTION" != "uninstall" ]; then
-  command -v herdr >/dev/null 2>&1 || die "herdr not found in PATH (Herdr 0.8.2+ is required)"
+  # 版本口径以 catalog 为准，脚本里不再硬编码：min 是契约下限（不达标就 die），
+  # recommended 是实测推荐（不达标只 warn，exit 0）。见 docs/review-2026-10-19.md §P0-4。
+  MIN_HERDR="$(python3 -c 'import json,sys; print(json.load(open(sys.argv[1])).get("min_herdr_version", "0.8.2"))' "$CATALOG_SRC")"
+  command -v herdr >/dev/null 2>&1 || die "herdr not found in PATH (Herdr $MIN_HERDR+ is required)"
   python3 "$AUDIT_SRC" --catalog "$CATALOG_SRC" --check-version \
-    || die "Herdr 0.8.2 or newer is required"
+    || die "Herdr $MIN_HERDR or newer is required"
 fi
 
 # ── Uninstall path ─────────────────────────────────────────────────

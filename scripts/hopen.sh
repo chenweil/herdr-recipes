@@ -26,7 +26,8 @@
 #   2. 失败回滚 —— 任一 split 失败立刻关掉已开 pane + 关掉 ws
 #   3. 不影响当前 ws —— 脚本开新 ws，所以 `prefix+alt+1..9` 在任何 ws 按都一样
 #   4. agent 启动失败不影响布局 —— pane 留干净 shell 给用户
-#   5. 命令对 herdr 0.8.2 --help 实测；布局数量对 split 实测
+#   5. 命令对 herdr 0.8.2 / 0.9.5 --help 实测；布局数量对 split 实测
+#      （0.8.2 是契约下限，0.9.5 是实测推荐，见 config/agent-catalog.json）
 #   6. 成功创建的 ws 不由脚本自动清理；只有 split 失败时才走回滚，正常关闭由用户负责
 
 set -euo pipefail

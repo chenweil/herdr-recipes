@@ -11,10 +11,20 @@
 
 ### 变更
 
+- **版本口径拆成「契约下限」与「实测推荐」两档**。`config/agent-catalog.json` 新增
+  `recommended_herdr_version`（0.9.5），`min_herdr_version` 仍是 0.8.2 不动。
+  `install.sh` 不再硬编码版本号，改为从 catalog 读，报错文案跟着 catalog 走。
+  - 低于 min：不兼容，`die`（行为不变）
+  - 低于 recommended：只 `warn`，并说明 0.9.5 之前的中/日/韩输入法会让
+    `prefix+alt+1..9` / `prefix+ctrl+1..9` 失效（上游 0.9.4 #5017 重写输入管线后
+    的回归，0.9.5 #5255 修复）
+  - 不把 min 抬到 0.9.5，是为了不挡住仍在 0.8.x 的用户；详见
+    `docs/review-2026-10-19.md` §P0-4
 - **在 Herdr 0.9.5 上复跑九布局 smoke matrix**（核销 issue #10）。0.9.1 的
   `pane split` 目标语义变化（#4123）**未影响 `_steps_for`**：`_h_split` 始终显式
   传 target，9 个布局的 pane 数与按 `(y,x)` 排序的自然顺序与 0.9.1 记录逐条一致。
   细节见 `docs/herdr-research.md` 的「九布局 smoke matrix（Herdr 0.9.5）」节。
+- `docs/herdr-research.md` 头部验证环境补上 0.9.5，状态行补 #10 已核销。
 
 ### 新增
 

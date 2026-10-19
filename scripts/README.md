@@ -21,7 +21,7 @@ hopen-once.sh --version     # hopen-once 0.7.0
 
 ## agent-audit.py — 只读 agent catalog audit
 
-`agent-audit.py` 要求 Herdr `0.8.2+`，解析当前 `herdr agent start --help` 的全部
+`agent-audit.py` 要求 Herdr `0.8.2+`（推荐 `0.9.5`；低于推荐版本只警告不拦截），解析当前 `herdr agent start --help` 的全部
 canonical kinds，并读取 `herdr integration status`。它根据
 `config/agent-catalog.json` 分别报告 executable 的 `found`/`missing`/`unknown` 和
 integration 的 `current`/`missing`/`outdated`/`N/A` 状态。
@@ -103,7 +103,10 @@ herdr server reload-config
 
 - 每次开新 ws，不复用当前 ws；如需"在当前 ws 内调整布局"，另写工具
 - 成功创建的 ws 不会由脚本自动关闭；脚本只在 split 失败时回滚，正常关闭由用户负责
-- Herdr 0.8.2 实测通过，0.9.1 上 221/122 布局实测通过；旧版 API 差异自担
+- Herdr 0.8.2 为契约下限（catalog 的 `min_herdr_version`），0.9.5 为实测推荐
+  （`recommended_herdr_version`）——2026-10-19 在 0.9.5 上复跑全部 9 布局 smoke
+  通过。低于推荐版本时 `install.sh` 只警告并说明中文输入法下 prefix 快捷键可能失效；
+  旧版 API 差异自担
 - `hopen-agents.conf` 不是通用 TOML 解析器；`kind_for` / `prompt_for` 只支持固定
   格式：从第 1 列开始、精确匹配的 `[layout.XX.panes.POS]` section，以及从第 1 列
   开始的单行 `kind = "..."` / `prompt = "..."`。

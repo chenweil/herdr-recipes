@@ -1,6 +1,7 @@
 import json
 import os
 import pathlib
+import re
 import subprocess
 import tempfile
 import textwrap
@@ -9,6 +10,11 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 AUDIT = REPO_ROOT / "scripts" / "agent-audit.py"
+
+
+def parse_version_text(text):
+    match = re.search(r"\b(\d+)\.(\d+)\.(\d+)", text or "")
+    return tuple(int(part) for part in match.groups()) if match else None
 
 FAKE_HERDR = textwrap.dedent(
     r"""
@@ -57,12 +63,13 @@ class AgentAuditTests(unittest.TestCase):
     def tearDown(self):
         self.temp_dir.cleanup()
 
-    def write_catalog(self, kinds, aliases=None):
+    def write_catalog(self, kinds, aliases=None, min_herdr="0.8.2", recommended=None):
         self.catalog_path.write_text(
             json.dumps(
                 {
                     "catalog_version": 1,
-                    "min_herdr_version": "0.8.2",
+                    "min_herdr_version": min_herdr,
+                    **({"recommended_herdr_version": recommended} if recommended else {}),
                     "aliases": aliases or {},
                     "kinds": kinds,
                 }
@@ -86,6 +93,64 @@ class AgentAuditTests(unittest.TestCase):
             next(entry for entry in catalog["kinds"] if entry["kind"] == "agy")["integration_targets"],
             ["antigravity-cli"],
         )
+
+    def test_repository_catalog_separates_minimum_from_recommended_version(self):
+        """min 是契约下限、recommended 是实测推荐，两者不可合并成一个字段。
+
+        0.9.5 之前的中/日/韩输入法会让 prefix 快捷键失效，而 prefix+alt/ctrl+1..9
+        正是本仓主入口；但把 min 抬到 0.9.5 会挡住仍在 0.8.x 的用户。
+        见 docs/review-2026-10-19.md §P0-4。
+        """
+        catalog = json.loads((REPO_ROOT / "config" / "agent-catalog.json").read_text())
+
+        minimum = parse_version_text(catalog["min_herdr_version"])
+        recommended = parse_version_text(catalog["recommended_herdr_version"])
+        self.assertIsNotNone(minimum)
+        self.assertIsNotNone(recommended)
+        self.assertLess(minimum, recommended)
+
+    def test_below_recommended_version_warns_but_still_passes(self):
+        self.write_catalog(
+            [{"kind": "pi", "executables": ["pi"], "integration_targets": ["pi"]}],
+            min_herdr="0.8.2",
+            recommended="0.9.5",
+        )
+        self.environment["FAKE_HERDR_VERSION"] = "herdr 0.9.3"
+
+        result = self.run_audit("--check-version")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertIn("warning", result.stderr)
+        self.assertIn("recommended 0.9.5", result.stderr)
+        # 警告必须说清楚后果，否则用户不知道要不要升
+        self.assertIn("prefix", result.stderr)
+        self.assertIn("minimum 0.8.2", result.stdout)
+
+    def test_below_minimum_version_still_fails(self):
+        self.write_catalog(
+            [{"kind": "pi", "executables": ["pi"], "integration_targets": ["pi"]}],
+            min_herdr="0.8.2",
+            recommended="0.9.5",
+        )
+        self.environment["FAKE_HERDR_VERSION"] = "herdr 0.8.1"
+
+        result = self.run_audit("--check-version")
+
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("too old", result.stderr)
+
+    def test_at_recommended_version_emits_no_warning(self):
+        self.write_catalog(
+            [{"kind": "pi", "executables": ["pi"], "integration_targets": ["pi"]}],
+            min_herdr="0.8.2",
+            recommended="0.9.5",
+        )
+        self.environment["FAKE_HERDR_VERSION"] = "herdr 0.9.5"
+
+        result = self.run_audit("--check-version")
+
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        self.assertNotIn("warning", result.stderr)
 
     def run_audit(self, *args):
         return subprocess.run(

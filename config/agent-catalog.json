@@ -1,6 +1,7 @@
 {
   "catalog_version": 2,
   "min_herdr_version": "0.8.2",
+  "recommended_herdr_version": "0.9.5",
   "aliases": {
     "op": "opencode",
     "cc": "claude",

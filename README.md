@@ -177,7 +177,9 @@ Kinds are placed in panes in visual reading order (left-to-right, top-to-bottom)
 
 ## Install (one-time, per machine)
 
-Prerequisites: Herdr `0.8.2+` already installed, `python3` in PATH (used by the pane switcher,
+Prerequisites: Herdr `0.8.2+` already installed (`0.9.5` recommended — earlier versions
+lose `prefix+alt` / `prefix+ctrl` shortcuts under a Chinese/Japanese/Korean IME, see
+`docs/review-2026-10-19.md`), `python3` in PATH (used by the pane switcher,
 agent audit, and installer). Running the test suite additionally needs Python 3.11+ (uses
 `tomllib`); the runtime scripts themselves do not. The installer reports optional
 executable/integration gaps but never installs integrations.
