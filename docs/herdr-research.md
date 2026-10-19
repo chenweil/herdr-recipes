@@ -126,8 +126,9 @@ executable 存在。
 ### Integration 与恢复边界
 
 - Herdr 可在 server restart 后恢复 workspace/tab/pane 的形状和 cwd。
-- 受支持 agent 的 native conversation resume 依赖 current official integration 提供的
-  session reference。
+- 0.8.x 的 native conversation resume 使用 official integration 提供的 session
+  reference；0.9.2 起也允许 agent 自报 resume 命令，并非只能依赖内置集成
+  （见上游追踪 §二-1）。这不代表任意 agent 已在本机验证恢复成功。
 - 这不等于恢复 workflow 的 DAG、retry、result 或 cleanup 状态；这些属于 workflow
   runner 自己的持久化协议。
 - `integration install` 会写入 Claude、Codex、Pi 等工具的用户配置，因此
@@ -135,7 +136,7 @@ executable 存在。
 
 ## 3. herdr-recipes 当前状态
 
-当前版本为 0.6.1。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
+当前版本为 0.8.0。仓库提供固定 pane layouts、可选 agent 派位、初始 prompt、pane
 数字切换、键位配置和 installer。
 
 ### 已经成立的实现
@@ -421,3 +422,53 @@ CLI 路径（`herdr pane close`）不弹确认。之前按 release notes 推断�
 
 生产实现必须分别验证脚本静态检查、fixture/mock contract，以及真实 Herdr pane 几何、
 重复布局、部分 agent 失败和通知行为。仅有 shell syntax 通过不能证明运行时契约成立。
+
+
+## 7. v0.8.0 收尾验证（2026-10-19，issue #13）
+
+### 测试去重与失败回滚
+
+`unittest` 原先发现 106 项，其中 48 次是测试类继承带来的重复执行。现在共用
+不包含 test 方法的 fixture，保留 58 项原有用例，增加 3 项回滚用例；共 61 项，
+没有继承重复收集。未将 Python fake 改写为 shell，先消除可证明的重复工作。
+
+同机全量基线：106 项通过，84.903 秒；收尾后：61 项通过，47.445 秒。
+减少重复后即低于原先 120 秒窗口，新增回滚覆盖也包含在后者耗时内。
+Bash syntax、Python compileall、git diff --check 和四个入口的 0.8.0 版本输出均通过。
+
+新增故障注入覆盖两个入口的四个 split 失败点，断言失败后不再启动 agent、提交
+prompt、切换 workspace 或发送 Recipe Ready 通知。workspace close 失败时逐 pane
+兜底；最后一个 pane 关闭后不再重复 workspace close；若 pane 清理仍失败，stderr
+明确报告“回滚未完成”及 workspace ID。fake 用独立状态文件验证资源是否清理。
+
+### 最低版本与推荐版本的真实运行态
+
+- 最低版本：从官方 [v0.8.2 发布](https://github.com/herdrdev/herdr/releases/tag/v0.8.2)
+  下载 `herdr-macos-aarch64` 到临时目录，`--version` 为 `herdr 0.8.2`，其 split help
+  已包含 `--ratio`。
+- 推荐版本：`/opt/homebrew/bin/herdr`，`herdr 0.9.5`。
+- 两者均新建独立 server，使用临时 `HERDR_CONFIG_PATH`、`HERDR_SOCKET_PATH`、
+  `XDG_CONFIG_HOME` 和 `XDG_STATE_HOME`；没有修改本机安装、集成或用户 server。
+- 每个版本分别通过 `hopen.sh <code> -n` 与 `hopen-once.sh -l <code> -n` 创建
+  全部九布局，检查 pane 数、创建顺序对应的 rectangle、比例与 1 格取整容差。
+  共 36 次布局检查通过；每次关闭新 workspace，最后与初始 workspace 集合对照，
+  再停止独立 server，全部完成清理。
+
+| 版本 | 内容区 | 13/31 的三段高度 | 111 列宽 | 221 列宽 | 122 列宽 | 两入口九布局 |
+|---|---|---|---|---|---|---|
+| 0.8.2 | (26,1,94,39) | 13/13/13 | 47/24/23 | 24/23/47 | 47/24/23 | 18/18 |
+| 0.9.5 | (0,0,120,40) | 13/14/13 | 60/30/30 | 30/30/60 | 60/30/30 | 18/18 |
+
+0.8.2 的 sidebar 与 tab 栏造成内容区偏移，验证按真实 pane 的包围矩形归一化，
+未将整个 viewport 错当成 pane 内容区。`111` 保留 50/25/25 的原有行为；`221` 与
+`122` 均满足通高 pane 与四宫格各占一半。创建顺序和位置名保持一致。
+
+可重复运行（需要 Bash、Python 3 与 jq；binary 使用已安装或另行下载的路径）：
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 tests/smoke_herdr_layouts.py --binary /path/to/herdr --output /tmp/herdr-smoke.json
+```
+
+本轮没有启动真实模型 agent、验证 agent resume、实按 CJK 输入法快捷键或做 Linux
+运行态复验；这些不由布局 smoke 或 fixture 测试替代。

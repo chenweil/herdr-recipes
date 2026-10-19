@@ -95,7 +95,7 @@ navigator、pane 分裂、named target 在大 session 里都快了；外部事�
 | 事件订阅严重落后时返回 `events_lost` 错误而非静默丢事件 | 0.9.2 | 消费者要处理这个错误 |
 | 新 pane 设 `TERM_PROGRAM=herdr`，不再继承宿主终端 session ID | 0.9.2 | 依赖 iTerm2/Claude session marker 的脚本要适配 |
 | `pane split` 不带目标时，分裂**调用者**的 pane | 0.9.1 | 在 Herdr 内部调 CLI 时行为变了 |
-| 关最后一个 tab 需要确认 | 0.9.2 | 脚本化清理会多一步 |
+| TUI 手动关最后一个 tab 需要确认 | 0.9.2 | CLI 关闭不弹确认，见下文实测 |
 
 ## 四、对本仓库（herdr-recipes）的影响
 
@@ -140,8 +140,8 @@ navigator、pane 分裂、named target 在大 session 里都快了；外部事�
    - 绑一个 `keys.clear_pane`（0.9.2 新增，默认未绑）
    - 中文输入法下实按一次 `prefix+alt+1`，确认 0.9.5 #5255 的修复在本机生效
 4. 仍未处理的仓库内问题：
-   - 最低版本约束仍写 `0.8.2`（`install.sh:100,102`、`config/agent-catalog.json`
-     的 `min_herdr_version`、`scripts/hopen.sh:29` 注释），与 0.9.x 实际情况不符
-   - `install.sh:109` 卸载路径用裸 `rm`，在被可恢复删除包装拦截的环境下 `--uninstall`
-     会返回 1（见 `tests/test_agent_audit.py` 中对应的失败用例）
+   - ~~最低版本约束与推荐版本混淆~~：已拆为最低 0.8.2 / 推荐 0.9.5；两者均完成
+     两入口九布局的隔离运行态复验，最低版本无需提高。
+   - 卸载路径仍使用 `rm`；本次原生 shell 的隔离卸载测试通过。旧记录中的
+     “可恢复删除包装拦截”未在本轮复现，不能据此认定当前卸载必然失败。
 

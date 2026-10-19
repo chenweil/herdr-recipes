@@ -1,9 +1,26 @@
 # herdr-recipes 发展建议
 
 > 撰写日期：2026-09-22
-> 参考版本：herdr-recipes 0.7.0（`VERSION`）
+> 初始参考版本：herdr-recipes 0.7.0；状态更新：2026-10-19，v0.8.0
 > 横向参照：`eliasstravik/herdr-projects` 0.2.4（已读 `COORDINATOR.md` / `THREAD.md` / `adopt.rs` / `thread.rs` / `docs/herdr-notes.md`）、社区项目清单（见 `docs/herdr-research.md` §1）
 > 状态：建议稿，未经评审；任何条目落地前应单独立项并复核当前 Herdr 版本契约
+
+## 当前状态（2026-10-19）
+
+下文保留最初建议的上下文；本表与各节状态说明用于区分已实现、候选和待决策项。
+
+| 条目 | 当前状态 |
+|---|---|
+| §4.3 公共 conf 解析 | 已完成（`88df180`） |
+| §4.4 Agent name 文档 | 已完成；`--explain` 为可选想法，未立项 |
+| §4.6 已有能力测试 | 九布局派位、alias、Dispatch 和失败回滚已覆盖；去除继承重复收集 |
+| §5.4 跨版本契约 | 0.8.2 / 0.9.5 两入口九布局隔离 smoke 通过；0.9.1 为历史记录 |
+| §5.5 README 个人仓声明 | 已有 `Personal recipes` |
+| §3.1 hstatus | 下一阶段单独立项；先做只读查询，不含 hook / watch |
+| §4.1 / §4.2 / §4.5 | layout 抽表、alias 运行时读取、冲突检测尚未实现 |
+| §3.2 / §3.3 / §3.5 | hook、sidebar、.hopenrc 均为候选，尚未评审 |
+| §3.4 hclean | 与 ADR-0001 排除 cleanup 的边界冲突，需先决策，暂不实施 |
+| §3.6 / §3.7 | PR followup 暂缓；Spec → Tickets 不做 |
 
 本文不重述 ADR-0001 已确立的边界（Recipe Launcher ≠ Workflow Engine），也不重复 `herdr-research.md` 的事实记录。所有建议在此前提下提出。
 
@@ -72,14 +89,17 @@ ws=w3 (main)  panes=4
 | 步骤 | 依赖 | 数据源 |
 |------|------|--------|
 | 读 pane 列表 | herdr 0.9.1+ | `herdr pane list --workspace <id>` |
-| 读 agent 状态 | herdr 0.9.1+ | `herdr agent list --pane <pane>` |
-| 读最近 activity | progress hook / snapshot | `herdr pane report-metadata <pane>` 或 hook 写入的本地文件 |
+| 读 agent 状态 | 已核对 0.9.5 CLI | `herdr agent list` 返回全量，再按 `pane_id` 与 pane 联接；没有 `--pane` 选项 |
+| 读最近 activity | 尚未确认 | 只消费现有查询返回的已验证字段；`report-metadata` 是写入接口，不作为读取接口 |
 | 持续刷新 | `watch` 或 ticker | `hstatus.sh --watch 5` |
 
 **风险**：
 
 - herdr 0.9.1 之前 snapshot 不包含 pane activity tokens（见 `herdr-projects/docs/herdr-notes.md` §4）；要先确认本机版本快照字段
 - `hstatus.sh --watch` 不能阻塞现有 prefix 按键——只跑在 shell pane 里的子进程，按 `q` 退出
+
+**初版范围**：只读的人类摘要与 JSON；缺失 activity / elapsed 字段输出未知，不推算。
+`--watch`、新 hook 和 sidebar 配置后置。
 
 **预估工作量**：小（半天）。不需要 install.sh 改动。
 
@@ -141,6 +161,9 @@ ws=w3 (main)  panes=4
 ### 第二梯队：生命周期辅助
 
 #### 3.4 `hclean.sh` — stale workspace 清理
+
+**状态：待边界决策，不在当前执行队列。** ADR-0001 明确将 cleanup 排除在产品边界之外；
+以下仅保留候选设计，实施前需明确是否及如何修订该决定。
 
 **目标**：补齐 README 明说的"成功创建的 ws 不由脚本自动清理"边界。
 
@@ -276,27 +299,13 @@ agents = ["codex", "pi", "claude"]
 
 ### 4.3 `_kind_for` / `_prompt_for` / `_pane_name_for` 的重复解析
 
-`_kind_for` / `_prompt_for` / `_pane_name_for` 用相同的 `sed` + `grep` 模式解析 `hopen-agents.conf`，三个函数几乎复制粘贴。
-
-**建议**：抽一个 `_read_section_key <file> <layout> <pos> <key>` 公共函数，三处调用。
-
-**风险**：低。纯重构，CHANGELOG 加一行。
-
-**预估工作量**：极小（1 小时）。
+**已完成**：`88df180` 抽出 `_read_section_key`，三个读取函数共用同一实现。
+不再作为未来开发任务；固定格式子集的限制仍在 scripts/README 中说明。
 
 ### 4.4 `_agent_name` 的长度处理需要文档化
 
-`_agent_name` 在 `>32` 时截断并加 6 位 hash。**问题**：
-
-- 行为没有写在 README 或 scripts/README
-- 用户看到 agent 列表里 `hopen-billing-t-0001--a8f3c2` 这样的格式不知道为啥
-
-**建议**：
-
-- 在 `scripts/README.md` 加一节 "Agent name format"，说明最长 32 字符 + hash fallback
-- `_agent_name` 函数加 `--explain` flag（仅开发期）打 debug 信息
-
-**预估工作量**：极小（半小时）。
+**文档已完成**：`scripts/README.md` 的“Agent name 格式”解释 32 字符上限、
+截断和 6 位 hash。原建议中的 `--explain` 尚未实现，但没有实际使用需求，暂不立项。
 
 ### 4.5 install.sh 的 managed block 检测
 
@@ -317,22 +326,20 @@ agents = ["codex", "pi", "claude"]
 
 **预估工作量**：中（1 天）。
 
-### 4.6 测试覆盖盲点
+### 4.6 测试覆盖状态
 
-现有 `tests/` 用 `tomllib` 锁住 keys / catalog / audit。**未覆盖**：
+| 能力 | 当前覆盖 |
+|---|---|
+| 九布局派位、pane name 与两个入口映射 | fixture 契约测试 |
+| `_resolve_kind` alias / fallback | 与 catalog 的同步测试；运行时读取 catalog 仍未实现 |
+| split 失败与回滚 | 两入口、每个 split 失败点、workspace close 兜底及残留诊断 |
+| Dispatch failure 累积 | agent start / prompt 失败、继续尝试其它 pane、通知与 stdout 契约 |
+| install 备份和卸载 | 隔离配置测试，包含备份内容和同秒重名保护 |
+| 真实布局几何 | 0.8.2 / 0.9.5 各两入口九布局隔离 smoke |
+| hook 健康检查 | 功能尚未立项，暂无测试义务 |
 
-| 缺失 | 建议 |
-|------|------|
-| `_h_build_layout` 的 split 顺序与 pane 名字段 | unit test（mock herdr CLI 输出）|
-| `_resolve_kind` 的 alias 与 fallback | unit test（bash 函数化后） |
-| `hopen.sh` 的失败回滚路径 | integration test（用 stub `herdr` 脚本模拟 split 失败）|
-| `_start_agent` 的 dispatch failure 累积 | unit test |
-| install.sh 的备份命名（`-1` / `-2` 后缀） | 已有，建议加"同秒重跑 10 次"的边界用例 |
-| `agent-audit.py` 的 hook 健康检查（未来 §3.2）| 新加 |
-
-**建议**：先把 `_h_build_layout` 和 `_resolve_kind` 函数化（已经大部分是函数），加 unit test。integration test 留到 §3.1 / §3.4 时一起做。
-
-**预估工作量**：中（持续投入，每个新功能顺手补测试）。
+测试 fixture 与用例分离，61 项测试不再继承重复执行。后续功能在其实际调用入口
+增加覆盖；更多 fuzz 或备份高频边界测试按实际问题追加。
 
 ---
 
@@ -349,7 +356,8 @@ ADR-0001 写于 2026-09-03，至今未增。**建议**：
 
 `AGENTS.md` 提到 issue tracker 在 GitHub Issues。**建议**：
 
-- 现有 issue 编号到 #9（CHANGELOG 提及），但 `docs/herdr-research.md` §3 只看到 #2-#8 的描述；维护一份 issue 索引（编号 / 标题 / 状态 / 对应 CHANGELOG 版本）
+- 历史 #1–#12 均已关闭；v0.8.0 收尾由 #13 跟踪。以 GitHub issue 状态为准，
+  不再维护会重复漂移的手工编号清单；新功能在独立 issue 中记录范围和验收。
 - §3 发展建议落地时按"先开 issue 再写代码"流程
 
 ### 5.3 CHANGELOG 与 VERSION 的同步
@@ -362,10 +370,12 @@ VERSION 单一来源、CHANGELOG 跟版本——这个流程很规范。**建议
 
 ### 5.4 跨 Herdr 版本契约
 
-`docs/herdr-research.md` 记录了 0.8.2 / 0.9.1 两次验证。**建议**：
+`docs/herdr-research.md` 保留 0.8.2 / 0.9.1 / 0.9.5 的历史记录；v0.8.0 又用
+官方 0.8.2 与本机 0.9.5 分别验证两个入口全部九布局。后续：
 
 - 每次 Herdr 大版本升级后，跑一次 smoke matrix（`docs/herdr-research.md` §6 有现成模板），把结果 append 到 research.md
-- `install.sh` 的 `min_herdr_version` 与 research.md 验证记录保持一致
+- catalog 的 min 表示契约下限（当前 0.8.2），recommended 表示实测推荐（0.9.5）；
+  新 API 引入时补最低版本验证，不因推荐版本更新自动提高下限。
 
 ### 5.5 公开 API 边界
 
@@ -376,7 +386,7 @@ herdr-recipes 是个人配置仓库（CONTEXT、ADR-0001 都明确），但 READ
 
 **建议**：
 
-- 在 README 开头加一行明确的"个人 recipes 仓库"声明
+- README 已有 `Personal recipes` 声明，完成。
 - 涉及"用户应该改哪些文件"的部分加 `> 你可以改` / `> 不要改` 标注
 - 不要为了泛化而增加配置项——新增 flag 之前先问"是不是真有第二个用户"
 
@@ -411,21 +421,15 @@ docs/
 
 ---
 
-## 7. 推荐的落地顺序
+## 7. 当前落地顺序
 
-| 顺序 | 项 | 理由 | 预估工作量 |
-|------|----|------|------------|
-| 1 | §4.3 抽公共解析函数 | 极小，纯重构，立即受益 | 1 小时 |
-| 2 | §4.4 agent name 格式文档化 | 极小，消除用户困惑 | 半小时 |
-| 3 | §3.1 `hstatus.sh` | 小，立即可用的可观测性 | 半天 |
-| 4 | §3.4 `hclean.sh` | 小，补齐 README 明说的边界 | 半天 |
-| 5 | §4.1 layout 元数据抽表 | 中，预防 0.5.0 那种 bug 重现 | 1-2 天 |
-| 6 | §3.2 pi / opencode hook（先调研）| 中，前置调研决定能不能做 | 2-3 天 |
-| 7 | §3.3 sidebar row | 小，要看 §6 是否冲突 | 半天 |
-| 8 | §3.5 `.hopenrc` 持久化 | 中，新概念，先小后大 | 1-2 天 |
-| 9 | §3.6 PR followup | 待前置问题回答 | 不定 |
+1. 测试去重、失败回滚与最低版本验证（#13，v0.8.0）。
+2. 同步事实、候选状态、版本与 Changelog；保留历史证据。
+3. 发布 v0.8.0，记录通过的验证及未覆盖的环境。
+4. 单独立项 §3.1 `hstatus`，先交付只读摘要与 JSON。
+5. layout 抽表、alias 运行时读取和 installer 冲突检测按具体需求再立项。
 
-未列入：§3.7（明确不做）、§5.x（流程类，与具体功能并行推进即可）。
+hook / sidebar / `.hopenrc` 仍是候选；`hclean` 先解决 ADR 边界，PR followup 暂缓。
 
 ---
 

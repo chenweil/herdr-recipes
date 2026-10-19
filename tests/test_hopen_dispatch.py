@@ -38,6 +38,11 @@ FAKE_HERDR = textwrap.dedent(
         index = args.index(name)
         return args[index + 1]
 
+    lifecycle_path = pathlib.Path(os.environ["FAKE_HERDR_LIFECYCLE"])
+
+    def save_lifecycle(state):
+        lifecycle_path.write_text(json.dumps(state))
+
 
     if args[:2] == ["workspace", "list"]:
         respond({"result": {"workspaces": []}})
@@ -45,6 +50,7 @@ FAKE_HERDR = textwrap.dedent(
         respond({"result": {"tabs": []}})
     if args[:2] == ["workspace", "create"]:
         workspace = os.environ.get("FAKE_WORKSPACE_ID", "w-test")
+        save_lifecycle({"workspace_exists": True, "panes": [workspace + ":p1"]})
         respond(
             {
                 "result": {
@@ -58,13 +64,36 @@ FAKE_HERDR = textwrap.dedent(
         state_path = pathlib.Path(os.environ["FAKE_HERDR_STATE"])
         count = int(state_path.read_text() or "0") if state_path.exists() else 0
         state_path.write_text(str(count + 1))
+        if os.environ.get("FAKE_FAIL_SPLIT_AT") == str(count + 1):
+            respond({"error": {"code": "split_failed", "message": "fake split failure"}}, 1)
         workspace = os.environ.get("FAKE_WORKSPACE_ID", "w-test")
-        respond({"result": {"pane": {"pane_id": "%s:p%d" % (workspace, count + 2)}}})
+        pane = "%s:p%d" % (workspace, count + 2)
+        lifecycle = json.loads(lifecycle_path.read_text())
+        lifecycle["panes"].append(pane)
+        save_lifecycle(lifecycle)
+        respond({"result": {"pane": {"pane_id": pane}}})
+    if args[:2] == ["workspace", "close"]:
+        lifecycle = json.loads(lifecycle_path.read_text())
+        if not lifecycle["workspace_exists"]:
+            respond({"error": {"code": "workspace_not_found"}}, 1)
+        if os.environ.get("FAKE_FAIL_WORKSPACE_CLOSE") == "1":
+            respond({"error": {"code": "workspace_close_failed"}}, 1)
+        save_lifecycle({"workspace_exists": False, "panes": []})
+        respond({"result": {"type": "ok"}})
+    if args[:2] == ["pane", "close"]:
+        lifecycle = json.loads(lifecycle_path.read_text())
+        if args[2] not in lifecycle["panes"]:
+            respond({"error": {"code": "pane_not_found"}}, 1)
+        if os.environ.get("FAKE_FAIL_PANE_CLOSE") == "1":
+            respond({"error": {"code": "pane_close_failed"}}, 1)
+        lifecycle["panes"].remove(args[2])
+        lifecycle["workspace_exists"] = bool(lifecycle["panes"])
+        save_lifecycle(lifecycle)
+        respond({"result": {"type": "ok"}})
     if args[:2] in (
         ["tab", "rename"],
         ["pane", "rename"],
         ["workspace", "focus"],
-        ["workspace", "close"],
     ):
         respond({"result": {"type": "ok"}})
     if args[:2] == ["agent", "start"]:
@@ -104,7 +133,7 @@ FAKE_HERDR = textwrap.dedent(
 ).lstrip()
 
 
-class FakeHerdrLauncherTests(unittest.TestCase):
+class FakeHerdrLauncherFixture:
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         root = pathlib.Path(self.temp_dir.name)
@@ -115,6 +144,7 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         fake_herdr.chmod(0o755)
         self.log_path = root / "herdr.log"
         self.state_path = root / "herdr.state"
+        self.lifecycle_path = root / "herdr.lifecycle.json"
         self.conf_path = root / "hopen-agents.conf"
         self.environment = os.environ.copy()
         self.environment.update(
@@ -122,9 +152,13 @@ class FakeHerdrLauncherTests(unittest.TestCase):
                 "PATH": str(self.bin_dir) + os.pathsep + self.environment["PATH"],
                 "FAKE_HERDR_LOG": str(self.log_path),
                 "FAKE_HERDR_STATE": str(self.state_path),
+                "FAKE_HERDR_LIFECYCLE": str(self.lifecycle_path),
                 "FAKE_WORKSPACE_ID": "w-test",
                 "FAKE_FAIL_START_KINDS": "",
                 "FAKE_FAIL_PROMPT_CONTAINS": "",
+                "FAKE_FAIL_SPLIT_AT": "",
+                "FAKE_FAIL_WORKSPACE_CLOSE": "",
+                "FAKE_FAIL_PANE_CLOSE": "",
                 "HOPEN_CONF": str(self.conf_path),
             }
         )
@@ -156,11 +190,14 @@ class FakeHerdrLauncherTests(unittest.TestCase):
             self.log_path.unlink()
         if self.state_path.exists():
             self.state_path.unlink()
+        self.lifecycle_path.unlink(missing_ok=True)
 
     @staticmethod
     def calls_for(calls, *prefix):
         return [call for call in calls if call[: len(prefix)] == list(prefix)]
 
+
+class FakeHerdrLauncherTests(FakeHerdrLauncherFixture, unittest.TestCase):
     def test_canonical_kind_reaches_herdr_without_executable_preflight(self):
         result = self.run_launcher(HOPEN_ONCE, "-l", "11", "cursor", "codex")
 
@@ -616,7 +653,7 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         )
 
 
-class LayoutVisualOrderContractTests(FakeHerdrLauncherTests):
+class LayoutVisualOrderContractTests(FakeHerdrLauncherFixture, unittest.TestCase):
     """契约测试：所有 9 个 layout 的视觉位置映射和派位顺序。
 
     每个 layout 必须满足下列契约：
@@ -877,7 +914,7 @@ class LayoutVisualOrderContractTests(FakeHerdrLauncherTests):
                 )
 
 
-class ThreePaneColumnRatioTests(FakeHerdrLauncherTests):
+class ThreePaneColumnRatioTests(FakeHerdrLauncherFixture, unittest.TestCase):
     """`13` / `31` 的三 pane 列必须走显式 ratio，而不是连续两次对半切。
 
     连续对半切会把那一列切成 50% / 25% / 25%，与其它布局「每列等分」的
@@ -914,7 +951,7 @@ class ThreePaneColumnRatioTests(FakeHerdrLauncherTests):
                 self.assertTrue(all(r is None for r in ratios), msg=f"{code}: {ratios}")
 
 
-class LauncherArgumentTests(FakeHerdrLauncherTests):
+class LauncherArgumentTests(FakeHerdrLauncherFixture, unittest.TestCase):
     """hopen.sh 的参数解析与 --help 输出。"""
 
     def write_conf_with_kind(self):
@@ -969,6 +1006,59 @@ class LauncherArgumentTests(FakeHerdrLauncherTests):
                 result = self.run_launcher(script, "--help")
                 self.assertEqual(result.returncode, 0, msg=result.stderr)
                 self.assertIn(last_line, result.stdout)
+
+
+class LayoutRollbackTests(FakeHerdrLauncherFixture, unittest.TestCase):
+    def launcher_cases(self):
+        self.write_conf('[layout.221.panes.left-top]\nkind = "pi"\n')
+        return ((HOPEN, ("221",)), (HOPEN_ONCE, ("-l", "221", "codex:5")))
+
+    def assert_dispatch_aborted(self, result, split_count):
+        self.assertNotEqual(result.returncode, 0)
+        self.assertEqual(result.stdout, "")
+        self.assertIn("split 失败", result.stderr)
+        calls = self.read_calls()
+        self.assertEqual(len(self.calls_for(calls, "pane", "split")), split_count)
+        for prefix in (("agent", "start"), ("agent", "prompt"),
+                       ("workspace", "focus"), ("notification", "show")):
+            self.assertEqual(self.calls_for(calls, *prefix), [])
+        self.assertEqual(self.calls_for(calls, "workspace", "close"),
+                         [["workspace", "close", "w-test"]])
+
+    def test_every_split_failure_closes_only_the_new_workspace(self):
+        for script, args in self.launcher_cases():
+            for split_at in range(1, 5):
+                with self.subTest(script=script.name, split=split_at):
+                    self.clear_calls()
+                    result = self.run_launcher(script, *args, FAKE_FAIL_SPLIT_AT=str(split_at))
+                    self.assert_dispatch_aborted(result, split_at)
+                    self.assertEqual(self.calls_for(self.read_calls(), "pane", "close"), [])
+                    self.assertEqual(json.loads(self.lifecycle_path.read_text()),
+                                     {"workspace_exists": False, "panes": []})
+
+    def test_failed_workspace_close_falls_back_without_closing_destroyed_workspace(self):
+        for script, args in self.launcher_cases():
+            with self.subTest(script=script.name):
+                self.clear_calls()
+                result = self.run_launcher(script, *args, FAKE_FAIL_SPLIT_AT="3",
+                                           FAKE_FAIL_WORKSPACE_CLOSE="1")
+                self.assert_dispatch_aborted(result, 3)
+                self.assertEqual(self.calls_for(self.read_calls(), "pane", "close"),
+                                 [["pane", "close", f"w-test:p{i}"] for i in range(1, 4)])
+                self.assertEqual(json.loads(self.lifecycle_path.read_text()),
+                                 {"workspace_exists": False, "panes": []})
+
+    def test_incomplete_cleanup_is_visible_and_identifies_the_workspace(self):
+        for script, args in self.launcher_cases():
+            with self.subTest(script=script.name):
+                self.clear_calls()
+                result = self.run_launcher(script, *args, FAKE_FAIL_SPLIT_AT="3",
+                                           FAKE_FAIL_WORKSPACE_CLOSE="1", FAKE_FAIL_PANE_CLOSE="1")
+                self.assert_dispatch_aborted(result, 3)
+                self.assertIn("回滚未完成", result.stderr)
+                self.assertIn("w-test", result.stderr)
+                self.assertTrue(json.loads(self.lifecycle_path.read_text())["workspace_exists"])
+                self.assertEqual(len(self.calls_for(self.read_calls(), "pane", "close")), 3)
 
 
 if __name__ == "__main__":

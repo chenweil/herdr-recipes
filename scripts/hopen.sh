@@ -202,9 +202,14 @@ _h_build_layout() {
       # workspace），所以优先关 ws；万一失败再逐 pane 兜底。反过来先关 pane
       # 的话，最后一次 workspace close 必然返回 workspace_not_found。
       if ! herdr workspace close "$ws_id" >/dev/null 2>&1; then
-        local p
-        for p in "${created[@]:-}"; do herdr pane close "$p" >/dev/null 2>&1 || true; done
-        herdr workspace close "$ws_id" >/dev/null 2>&1 || true
+        local p cleanup_failed=0
+        for p in "${created[@]}"; do
+          herdr pane close "$p" >/dev/null 2>&1 || cleanup_failed=1
+        done
+        # 最后一个 pane 关闭后 workspace 已销毁，无需再 workspace close。
+        if [ "$cleanup_failed" = 1 ]; then
+          echo "hopen: 回滚未完成，workspace=${ws_id}；请检查并手动关闭残留 pane" >&2
+        fi
       fi
       return 1
     }

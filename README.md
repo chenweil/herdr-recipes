@@ -24,10 +24,10 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 Every script accepts `-v`, `-V`, or `--version`:
 
 ```bash
-./install.sh --version                  # herdr-recipes 0.7.0
-scripts/hopen.sh -v                     # hopen 0.7.0
-scripts/hopen-once.sh -v                # hopen-once 0.7.0
-scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.7.0
+./install.sh --version                  # herdr-recipes 0.8.0
+scripts/hopen.sh -v                     # hopen 0.8.0
+scripts/hopen-once.sh -v                # hopen-once 0.8.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.8.0
 ```
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
@@ -61,6 +61,8 @@ Each digit is the number of panes in one column, read from left to right:
 the workspace width. `221` has the grid on the left (column widths 25% / 25% / 50%);
 `122` has the grid on the right (50% / 25% / 25%). Terminal rounding may differ
 by one cell.
+
+`111` preserves column widths of 50% / 25% / 25%.
 
 Panes within a column always split that column evenly. `13` and `31` are the only
 layouts with three panes in one column, so they pass an explicit split ratio
@@ -283,3 +285,16 @@ Comment out the corresponding `[[keys.command]]` line in `config/keys.toml`. Aft
 ## License
 
 MIT. See [LICENSE](LICENSE).
+
+
+## Verification
+
+```bash
+python3 -m unittest discover -s tests -v
+python3 tests/smoke_herdr_layouts.py --binary /path/to/herdr --output /tmp/herdr-smoke.json
+```
+
+The manual smoke uses an isolated server and temporary configuration, starts no
+agents, and checks both launchers across all nine layouts. Version 0.8.0 was
+verified on macOS with Herdr 0.8.2 and 0.9.5; see
+[the recorded evidence](docs/herdr-research.md).

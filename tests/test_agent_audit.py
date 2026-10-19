@@ -45,7 +45,7 @@ FAKE_HERDR = textwrap.dedent(
 ).lstrip()
 
 
-class AgentAuditTests(unittest.TestCase):
+class AgentAuditFixture:
     def setUp(self):
         self.temp_dir = tempfile.TemporaryDirectory()
         root = pathlib.Path(self.temp_dir.name)
@@ -76,6 +76,17 @@ class AgentAuditTests(unittest.TestCase):
             )
         )
 
+    def run_audit(self, *args):
+        return subprocess.run(
+            ["python3", str(AUDIT), "--catalog", str(self.catalog_path), *args],
+            cwd=REPO_ROOT,
+            env=self.environment,
+            capture_output=True,
+            text=True,
+        )
+
+
+class AgentAuditTests(AgentAuditFixture, unittest.TestCase):
     def test_repository_catalog_covers_all_herdr_0_9_1_kinds_and_aliases(self):
         catalog = json.loads((REPO_ROOT / "config" / "agent-catalog.json").read_text())
         expected = {
@@ -151,15 +162,6 @@ class AgentAuditTests(unittest.TestCase):
 
         self.assertEqual(result.returncode, 0, msg=result.stderr)
         self.assertNotIn("warning", result.stderr)
-
-    def run_audit(self, *args):
-        return subprocess.run(
-            ["python3", str(AUDIT), "--catalog", str(self.catalog_path), *args],
-            cwd=REPO_ROOT,
-            env=self.environment,
-            capture_output=True,
-            text=True,
-        )
 
     def test_reports_executable_and_integration_status_separately(self):
         self.write_catalog(
@@ -351,7 +353,7 @@ class ResolveKindCatalogSyncTests(unittest.TestCase):
         self.assertIn("PASSTHROUGH_OK", result.stdout)
 
 
-class InstallerAuditTests(AgentAuditTests):
+class InstallerAuditTests(AgentAuditFixture, unittest.TestCase):
     def run_install(self, version="herdr 0.8.2"):
         root = pathlib.Path(self.temp_dir.name)
         home = root / "home"

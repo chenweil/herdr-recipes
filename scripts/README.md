@@ -9,8 +9,8 @@
 `herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
-hopen.sh -v                 # hopen 0.7.0
-hopen-once.sh --version     # hopen-once 0.7.0
+hopen.sh -v                 # hopen 0.8.0
+hopen-once.sh --version     # hopen-once 0.8.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
@@ -54,7 +54,7 @@ session socket。布局响应、focus 响应、socket 错误和越界索引都�
 | 13   | `[A][B/C/D]`  | 左大，右列三等分   |
 | 31   | `[A/B/C][D]`  | 镜像 13             |
 | 22   | `[A/B][C/D]`  | 2×2                     |
-| 111  | `[A][B][C]`   | 三列等宽                |
+| 111  | `[A][B][C]`   | 列宽 50% / 25% / 25% |
 | 221  | `[A/B][C/D][E]` | 左四宫格 50% + 右通高 pane 50% |
 | 122  | `[A][B/C][D/E]` | 左通高 pane 50% + 右四宫格 50% |
 
@@ -97,7 +97,7 @@ herdr server reload-config
 
 - 不硬编码 pane ID，全从 `herdr workspace create` / `herdr pane split`
   返回值取
-- 任何一步 split 失败，回滚已开的 pane 并关掉整个 ws
+- 任一步 split 失败，优先关闭新建 ws；失败时逐 pane 兜底，清理未完成会报告 ws ID
 - herdr `pane split --direction {right,down}`，没有 horizontal/vertical；
   镜像布局（21/31）靠「先 ROOT right 抢右列，再 ROOT down 抢左下」实现
 - 脚本与 keybinding 解耦 —— 想换布局或换键位都只动一处
@@ -109,7 +109,7 @@ herdr server reload-config
 - Herdr 0.8.2 为契约下限（catalog 的 `min_herdr_version`），0.9.5 为实测推荐
   （`recommended_herdr_version`）——2026-10-19 在 0.9.5 上复跑全部 9 布局 smoke
   通过。低于推荐版本时 `install.sh` 只警告并说明中文输入法下 prefix 快捷键可能失效；
-  旧版 API 差异自担
+  0.8.2 与 0.9.5 已分别使用隔离 server 验证两个入口的全部九布局
 - `hopen-agents.conf` 不是通用 TOML 解析器；`kind_for` / `prompt_for` 只支持固定
   格式：从第 1 列开始、精确匹配的 `[layout.XX.panes.POS]` section，以及从第 1 列
   开始的单行 `kind = "..."` / `prompt = "..."`。

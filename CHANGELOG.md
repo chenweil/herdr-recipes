@@ -9,8 +9,12 @@
 
 ## [Unreleased]
 
+## [0.8.0] - 2026-10-19
+
 ### 修复
 
+- 回滚的逐 pane 兜底不再重复关闭已销毁的 workspace；若清理仍失败，stderr
+  明确给出 workspace ID，便于手动处理。两个启动入口均有故障注入回归覆盖。
 - **`hopen.sh <code> -n` 里的 `-n` 被静默忽略**。参数解析器遇到第一个非选项
   参数（layout 代号）就 `break`，写在代号后面的选项再也没人解析。头部注释声明的
   用法正是 `bash hopen.sh <code> [--no-agents|-n]`，所以「只开布局不起 agent」这条
@@ -25,6 +29,11 @@
 
 ### 变更
 
+- 测试 fixture 与测试用例分离，消除 48 次继承重复执行；原有 58 项用例全部保留，
+  新增 3 项回滚测试，覆盖每个 split 失败点、workspace close 兜底及清理失败诊断。
+- `111` 保留原有列宽 50% / 25% / 25%，修正文档中的“三列等宽”。
+- 官方 Herdr 0.8.2 与本机 0.9.5 均使用独立 server 验证两入口九布局，
+  保留 0.8.2 契约下限与 0.9.5 推荐版本。
 - **`13` / `31` 的三 pane 列改成真三等分**。原先连续两次对半切，实际几何是
   50% / 25% / 25%，与文档里的 `[A][B/C/D]` 以及其它布局「每列等分」的视觉契约冲突
   （`122` 的两列、`221` 的前两列都是等分的）。改用 Herdr 的 `pane split --ratio`
@@ -39,9 +48,9 @@
   `recommended_herdr_version`（0.9.5），`min_herdr_version` 仍是 0.8.2 不动。
   `install.sh` 不再硬编码版本号，改为从 catalog 读，报错文案跟着 catalog 走。
   - 低于 min：不兼容，`die`（行为不变）
-  - 低于 recommended：只 `warn`，并说明 0.9.5 之前的中/日/韩输入法会让
-    `prefix+alt+1..9` / `prefix+ctrl+1..9` 失效（上游 0.9.4 #5017 重写输入管线后
-    的回归，0.9.5 #5255 修复）
+  - 低于 recommended：只 `warn`，提示升级理由：0.9.4 #5017 重写输入管线后，
+    中/日/韩输入法下 prefix 快捷键存在回归，0.9.5 #5255 修复；不据此断言
+    所有低版本或所有输入法环境都必然失败。
   - 不把 min 抬到 0.9.5，是为了不挡住仍在 0.8.x 的用户；详见
     `docs/review-2026-10-19.md` §P0-4
 - **在 Herdr 0.9.5 上复跑九布局 smoke matrix**（核销 issue #10）。0.9.1 的
@@ -51,9 +60,22 @@
 - `docs/herdr-research.md` 头部验证环境补上 0.9.5，状态行补 #10 已核销。
 - 更正一条上游判断：0.9.4 #5143 的 `ui.confirm_close` 只影响 TUI 手动关闭，
   CLI 路径不弹确认（见「修复」小节的回滚条目）。
+- **`scripts/hopen.sh` 中重复的 conf 解析函数合并为 `_read_section_key`**：
+  `_kind_for` / `_prompt_for` / `_pane_name_for` 原先各自复制
+  `sed + grep + sed` 逻辑，现在统一调用共享 helper。顺带受益：提取正则
+  统一为 `([^"]*)`（在第一个 `"` 处严格截断），消除了 `_prompt_for`
+  原本使用的 `(.*)` 宽松正则会听任 stray 双引号干扰的隐性不一致。
+  后续添加 conf 字段现在只改一处。
+- **`scripts/README.md` 新增「Agent name 格式」章节**：
+  把 `hopen.sh` 的 `_agent_name` 函数中 32 字符截断 + cksum hash 规则
+  写到 `herdr agent list` 里能看到的 agent name 含义上，以避免下次看到
+  `hopen-billing-t-0001--a8f3c2` 这样的名字时还需要读函数源码才能判断
+  它属于哪个 pane。
 
 ### 新增
 
+- `tests/smoke_herdr_layouts.py`：可指定 Herdr 二进制的隔离 smoke，验证两入口
+  九布局的 pane 数和几何；不启动 agent，自动清理临时 workspace 与 server。
 - **`tests/test_hopen_dispatch.py::LayoutVisualOrderContractTests`**：
   三个契约测试覆盖所有 9 个 layout。
     - `test_layout_data_table_contract`：静态校验 `_panes_for` /
@@ -74,21 +96,7 @@
   同源之后后续接透 catalog 作为运行时权威只需要改 JSON，但为安全起见 bash 仍保留
   原表作为兜底。
 
-### 变更
-
-- **`scripts/hopen.sh` 中重复的 conf 解析函数合并为 `_read_section_key`**：
-  `_kind_for` / `_prompt_for` / `_pane_name_for` 原先各自复制
-  `sed + grep + sed` 逻辑，现在统一调用共享 helper。顺带受益：提取正则
-  统一为 `([^"]*)`（在第一个 `"` 处严格截断），消除了 `_prompt_for`
-  原本使用的 `(.*)` 宽松正则会听任 stray 双引号干扰的隐性不一致。
-  后续添加 conf 字段现在只改一处。
-- **`scripts/README.md` 新增「Agent name 格式」章节**：
-  把 `hopen.sh` 的 `_agent_name` 函数中 32 字符截断 + cksum hash 规则
-  写到 `herdr agent list` 里能看到的 agent name 含义上，以避免下次看到
-  `hopen-billing-t-0001--a8f3c2` 这样的名字时还需要读函数源码才能判断
-  它属于哪个 pane。
-
-## [0.7.0] - 20-09-2026
+## [0.7.0] - 2026-09-20
 
 ### 新增
 
@@ -126,7 +134,7 @@
 
 关闭 #9。
 
-## [0.6.1] - 19-09-2026
+## [0.6.1] - 2026-09-19
 
 ### 修复
 
@@ -140,7 +148,7 @@
 
 - 修正过期的 alias、版本号和 `--kind` 引用。
 
-## [0.6.0] - 19-09-2026
+## [0.6.0] - 2026-09-19
 
 ### 新增
 
@@ -158,7 +166,7 @@
 
 现在全部 9 个布局：`11` `12` `21` `22` `13` `31` `111` `221` `122`。
 
-## [0.5.0] - 07-09-2026
+## [0.5.0] - 2026-09-07
 
 ### 变更
 
@@ -171,7 +179,7 @@
   audit；未知 kind 仅报告 `availability unknown`，不自动安装 integration。
 - 补充与外部 Workflow 组合的最小文档示例，并记录七布局和 release-candidate smoke matrix。
 
-## [0.4.0] - 02-09-2026
+## [0.4.0] - 2026-09-02
 
 ### 新增
 
@@ -198,7 +206,7 @@
 - `install.sh` 托管的键位范围从 `prefix+(alt|ctrl)+1..6` 扩到 `1..7`。
   升级时会把旧的 `+7` 绑定（如果你自己加过）一并清掉再重建。
 
-## [0.3.0] - 28-08-2026
+## [0.3.0] - 2026-08-28
 
 ### 新增
 
@@ -228,7 +236,7 @@
 - `hopen-once.sh` 的 kind 数超出 layout pane 数时，多余部分不再被丢弃，
   而是当 pane name 用。
 
-## [0.2.0] - 27-08-2026
+## [0.2.0] - 2026-08-27
 
 ### 新增
 
@@ -244,7 +252,7 @@
 - 短 flag `-N` 从 `--no-agents` 上摘掉，`-n` 成为唯一写法
   （`-N` 在 0.3.0 里被 `--pane-name` 接手）。
 
-## [0.1.0] - 27-08-2026
+## [0.1.0] - 2026-08-27
 
 ### 新增
 
