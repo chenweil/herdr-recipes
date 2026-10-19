@@ -9,6 +9,49 @@
 
 ## [Unreleased]
 
+### 变更
+
+- **在 Herdr 0.9.5 上复跑九布局 smoke matrix**（核销 issue #10）。0.9.1 的
+  `pane split` 目标语义变化（#4123）**未影响 `_steps_for`**：`_h_split` 始终显式
+  传 target，9 个布局的 pane 数与按 `(y,x)` 排序的自然顺序与 0.9.1 记录逐条一致。
+  细节见 `docs/herdr-research.md` 的「九布局 smoke matrix（Herdr 0.9.5）」节。
+
+### 新增
+
+- **`tests/test_hopen_dispatch.py::LayoutVisualOrderContractTests`**：
+  三个契约测试覆盖所有 9 个 layout。
+    - `test_layout_data_table_contract`：静态校验 `_panes_for` /
+      `_position_for` / `_h_row_major` 表数据无重复、集合一致
+    - `test_hopen_once_dispatch_lands_on_visual_positions_for_all_layouts`：
+      `hopen-once.sh` 按视觉阅读顺序派位，填补 12 / 13 / 111 三种 layout
+      在该契约上无专门覆盖的缺口
+    - `test_hopen_and_hopen_once_kind_to_pane_mapping_match_for_all_layouts`：
+      `hopen.sh` 用 conf 与 `hopen-once.sh` 用 CLI 两种入口，对同一 layout
+      给出一致的 kind → pane 映射。背后的逻辑保证三个上下文
+      （创建顺序、视觉阅读顺序、conf 位置名）之间不会出现需要手动同步的副本。
+- **`tests/test_agent_audit.py::ResolveKindCatalogSyncTests`**：
+  两个测试锁定 `hopen.sh::_resolve_kind` 与 `config/agent-catalog.json::aliases` 同源。
+    - `test_hopen_resolve_kind_matches_catalog_aliases`：跑 bash source，遍历
+      catalog 中所有 alias → 验证 `_resolve_kind` 输出与 JSON 一致
+    - `test_hopen_resolve_kind_passes_through_unknown`：
+      任何未在 alias 表里的输入（包括 `codex` / `pi` / `hermes` 本身）原样透传。
+  同源之后后续接透 catalog 作为运行时权威只需要改 JSON，但为安全起见 bash 仍保留
+  原表作为兜底。
+
+### 变更
+
+- **`scripts/hopen.sh` 中重复的 conf 解析函数合并为 `_read_section_key`**：
+  `_kind_for` / `_prompt_for` / `_pane_name_for` 原先各自复制
+  `sed + grep + sed` 逻辑，现在统一调用共享 helper。顺带受益：提取正则
+  统一为 `([^"]*)`（在第一个 `"` 处严格截断），消除了 `_prompt_for`
+  原本使用的 `(.*)` 宽松正则会听任 stray 双引号干扰的隐性不一致。
+  后续添加 conf 字段现在只改一处。
+- **`scripts/README.md` 新增「Agent name 格式」章节**：
+  把 `hopen.sh` 的 `_agent_name` 函数中 32 字符截断 + cksum hash 规则
+  写到 `herdr agent list` 里能看到的 agent name 含义上，以避免下次看到
+  `hopen-billing-t-0001--a8f3c2` 这样的名字时还需要读函数源码才能判断
+  它属于哪个 pane。
+
 ## [0.7.0] - 20-09-2026
 
 ### 新增

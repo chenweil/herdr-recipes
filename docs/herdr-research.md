@@ -308,6 +308,38 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
   `herdr integration install --help` 的 18 个 target 列表里并标 `(experimental)`，
   `muse` 不在 integration target 列表中（详见 §2.2）。
 
+### 九布局 smoke matrix（Herdr 0.9.5，2026-10-19，核销 issue #10）
+
+在 Herdr 0.9.5 上复跑 `scripts/hopen.sh <code> -n` 全 9 布局，与 0.9.1 记录逐条比对。
+**#4123（`pane split` 无目标时改为分裂「调用者」pane）对本仓 `_steps_for` 无影响** ——
+`_h_split` 永远显式传 target，证据是 9 个布局的 pane 数与 `(y,x)` 排序后的自然顺序
+与 0.9.1 记录完全一致。rect 格式 `(x, y, w, h)`；本次客户端区域为 `120x40`
+（0.9.1 记录时为 `152x44`，绝对值不同属正常，只比对相对结构）。ws id 为开跑时
+自动分配的连续 id，已全部关闭并核销。
+
+| 代号 | pane 数 | 创建顺序 → 按 `(y,x)` 排序的自然顺序 | 与 0.9.1 |
+|---|---|---|---|
+| `11` | 2 | `p1 → p2` | 一致 |
+| `12` | 3 | `p1 → p2 → p3` | 一致 |
+| `21` | 3 | `p1 → p2 → p3` | 一致 |
+| `22` | 4 | `p1 → p2 → p4 → p3` | 一致 |
+| `13` | 4 | `p1 → p2 → p3 → p4` | 一致 |
+| `31` | 4 | `p1 → p2 → p3 → p4` | 一致 |
+| `111` | 3 | `p1 → p2 → p3` | 一致 |
+| `221` | 5 | `p1 → p2 → p3 → p4 → p5` | 一致 |
+| `122` | 5 | `p1 → p2 → p3 → p5 → p4` | 一致 |
+
+- `hopen-once.sh -l <code> -n` 抽查 `22` / `122` / `221`，rect 与 `hopen.sh` 同码结果
+  逐坐标一致 —— 两条路径共用 `_h_split` 与 `_h_build_layout`，结论可互相覆盖。
+- 跑完 `herdr workspace list` 与开跑前完全一致，临时 ws 全部清理。
+- 三个顺带核销项：
+  - `prefix` 数组（0.9.2 #4653）：`install.sh` 的 `has_prefix`（`^\s*prefix\s*=`）
+    对 `prefix = ["cmd+b", "ctrl+space"]` 仍匹配，不会被 bootstrap 覆盖。
+  - `herdr integration list` 的 install target 仍是 **18** 个（含 `letta`，
+    `muse` 不在其中），catalog v2 无需 bump。
+  - `[session] startup_per_agent_delay_ms` 只作用于**恢复**的 agent；`hopen` 开的是
+    新建 pane，不走恢复路径，故默认 100ms 不影响批量 dispatch。
+
 ### Issue #5 release-candidate smoke matrix（2026-09-07）
 
 - Herdr 0.8.2 真实布局矩阵已完成，按 rectangle `(y,x)` 排序得到：
