@@ -472,3 +472,68 @@ python3 tests/smoke_herdr_layouts.py --binary /path/to/herdr --output /tmp/herdr
 
 本轮没有启动真实模型 agent、验证 agent resume、实按 CJK 输入法快捷键或做 Linux
 运行态复验；这些不由布局 smoke 或 fixture 测试替代。
+
+
+## 8. hstatus 实现与验证（2026-10-19，issue #14，Unreleased）
+
+`scripts/hstatus.sh` 调用 Python 标准库实现，默认通过 `pane current --current`
+读取调用方 workspace；从 Herdr 外部使用 `--workspace <id>`。当前版本文件仍为
+0.8.0，功能记录在 Unreleased，未另切发布版本。
+
+### 已核对的 CLI 与快照契约
+
+0.8.2 与 0.9.5 的 `workspace list`、`pane list --workspace <id>`、`agent list`、
+`pane current --current` 和 `pane layout --pane <id>` 返回结构已在隔离 server
+读取验证。`agent list` 不支持 `--pane`，每份快照只查询一次，再按精确 pane ID
+和 workspace 联接；普通 shell pane 也保留。
+
+输出包含 `schema_version: 1`、workspace、pane_order 和 panes；缺失 label/kind/name
+为 null，缺失 status 为 unknown，未来的新状态字符串原样保留。无 Workflow 完成
+推断或 elapsed/activity 猜测。完整几何按 `(y,x)` 排序；多 tab、缺失或异常几何统一
+降级为完整 pane ID 字典序，stderr 告警，JSON 的 pane_order 为 pane_id。
+
+### 自动化验证
+
+- 新增 `tests/test_hstatus.py`，16 项测试：两 workspace 联接隔离、混合状态、
+  普通 shell、缺失/未知字段、caller 与焦点分离、几何排序和降级、坏 JSON、
+  server/超时/编码错误、stdout/stderr/exit 契约、help/version/参数及安装软链入口。
+- fake 仅接受约定的只读命令；正常显式查询精确为 workspace list、pane list、
+  一次 agent list、一次 pane layout，默认入口另加一次 pane current。
+- 全量 77 项通过，56.474 秒；Bash syntax、Python compileall 与 diff check 通过。
+
+### 真实入口 smoke
+
+`tests/smoke_hstatus.py` 使用临时 config/state/socket 启动独立 server，分别验证
+官方 Herdr 0.8.2 和本机 0.9.5，不操作用户正在使用的 server。
+
+| 场景 | 0.8.2 | 0.9.5 |
+|---|---|---|
+| 显式 workspace JSON 与人类输出 | 通过 | 通过 |
+| 有效 caller + 故意过期的 HERDR_WORKSPACE_ID | 仍解析到 caller workspace | 同左 |
+| 在真实 shell pane 内执行公共 hstatus.sh 入口 | 自动注入 caller，结果与显式查询一致 | 同左 |
+| 多 tab 的完整 pane 集与 pane_id 降级 | 通过并告警 | 通过并告警 |
+| workspace/pane 焦点、active tab、配置内容不变 | 通过 | 通过 |
+| 临时 workspace 与独立 server 清理 | 完成 | 完成 |
+
+实际 shell 的启动脚本会重排 PATH，因此测试 pane 的命令固定到被测版本的 CLI，
+避免误用 0.9.5 客户端访问 0.8.2 server；caller 环境由 Herdr 自动注入。若用户自己
+混用客户端/server，hstatus 会显示上游 protocol_mismatch，不会停止或升级 server。
+
+示例实测（两个版本相同，所用 workspace 为独立测试 server 中的 w1）：
+
+```text
+ws=w1 label="status-demo" panes=3 order=geometry
+  w1:p1 label="实现" kind=- name=- status=unknown
+  w1:p2 label="Review" kind=- name=- status=unknown
+  w1:p3 label="Shell" kind=- name=- status=unknown
+```
+
+复验命令：
+
+```bash
+python3 -m unittest discover -s tests -p test_hstatus.py -v
+python3 tests/smoke_hstatus.py --binary /path/to/herdr --output /tmp/hstatus-smoke.json
+```
+
+运行态使用普通 shell pane，没有为验证启动真实模型 agent。混合 agent kind/name/status
+由 fixture 验证，未把模拟状态当作真实模型运行结果。

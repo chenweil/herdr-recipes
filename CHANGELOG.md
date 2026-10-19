@@ -9,6 +9,15 @@
 
 ## [Unreleased]
 
+### 新增
+
+- **`hstatus.sh` 只读 workspace 状态摘要**（#14）：支持调用方上下文、显式
+  `--workspace`、文本与 `schema_version=1` JSON；包含普通 shell pane，按精确 ID
+  联接一次 agent 查询，缺失字段为 null/unknown。几何完整时按 `(y,x)` 排序，
+  多 tab 或几何不可用时告警并降级为完整 pane ID 顺序，全程不改变焦点或配置。
+- fixture 覆盖 workspace 隔离、混合状态、caller 解析、错误输出与降级；
+  `tests/smoke_hstatus.py` 在隔离 server 验证 caller、显式查询、多 tab 及状态不变。
+
 ## [0.8.0] - 2026-10-19
 
 ### 修复

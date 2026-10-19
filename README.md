@@ -8,6 +8,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 |---|---|
 | `scripts/hopen.sh` | Open a numbered-pane layout (`11`, `12`, `21`, `22`, `13`, `31`, `111`, `221`, `122`) in a new workspace, optionally dispatching agents from `hopen-agents.conf` |
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
+| `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
@@ -32,6 +33,21 @@ scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.8.0
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
 reader all shell scripts source. See [CHANGELOG.md](CHANGELOG.md) for release notes.
+
+## Workspace status (`hstatus.sh`)
+
+```bash
+scripts/hstatus.sh                         # caller's workspace, from a Herdr pane
+scripts/hstatus.sh --workspace w3          # explicit workspace, also outside Herdr
+scripts/hstatus.sh --workspace w3 --json   # schema_version=1 JSON snapshot
+```
+
+Shows every pane, including plain shells, with its label, detected agent kind/name,
+and current status. It reads existing state without changing focus or configuration.
+Pane order follows `(y,x)` geometry; if a layout is unavailable or covers only one
+of several tabs, it reports `pane_order=pane_id` and sorts by exact pane ID instead.
+A status snapshot does not establish that agent work or a Workflow has completed.
+See [the script reference](scripts/README.md#hstatussh--只读-workspace-状态摘要).
 
 ## Key bindings (with default `cmd+b` prefix)
 
@@ -292,6 +308,7 @@ MIT. See [LICENSE](LICENSE).
 ```bash
 python3 -m unittest discover -s tests -v
 python3 tests/smoke_herdr_layouts.py --binary /path/to/herdr --output /tmp/herdr-smoke.json
+python3 tests/smoke_hstatus.py --binary /path/to/herdr --output /tmp/hstatus-smoke.json
 ```
 
 The manual smoke uses an isolated server and temporary configuration, starts no

@@ -6,7 +6,7 @@
 
 版本号存在仓库根的 `VERSION` 文件，`version.sh` 是唯一读取入口，
 被 `hopen.sh` / `hopen-once.sh` / `install.sh` source；
-`herdr-pane-switch.py` 自己读同一个文件。发版只改 `VERSION` 一处。
+`herdr-pane-switch.py` 与 `hstatus.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
 hopen.sh -v                 # hopen 0.8.0
@@ -40,6 +40,54 @@ python3 scripts/agent-audit.py
 `pane_id` 执行 focus。优先使用 `HERDR_SOCKET_PATH`；未注入时回退到默认本地
 session socket。布局响应、focus 响应、socket 错误和越界索引都会以可见的非零
 错误返回。
+
+## hstatus.sh — 只读 workspace 状态摘要
+
+```bash
+hstatus.sh                           # 从 Herdr pane 调用，解析调用方 workspace
+hstatus.sh --workspace w3            # 显式 ID，可从 Herdr 外部调用
+hstatus.sh --json --workspace w3     # 一行 JSON，诊断仅写 stderr
+hstatus.sh --help
+hstatus.sh -v                        # 与仓库 VERSION 一致
+```
+
+`hstatus.sh` 是 `hstatus.py` 的 Bash 入口，安装后的 scripts 软链会直接包含它，
+无需新增键位或重新写配置。依赖 Python 3 和 Herdr 0.8.2+；已在 0.8.2 / 0.9.5
+隔离 server 验证。
+
+示例文本：
+
+```text
+ws=w3 label="demo" panes=2 order=geometry
+  w3:p1 label="实现" kind=codex name=implement status=working
+  w3:p2 label="Shell" kind=- name=- status=unknown
+```
+
+JSON 契约为 `schema_version: 1`：
+
+| 字段 | 含义 |
+|---|---|
+| `workspace.workspace_id` / `workspace.label` | 精确 workspace ID；label 可为 null |
+| `pane_order` | `geometry` 或 `pane_id` |
+| `panes[].pane_id` / `label` | 精确 pane ID；label 可为 null |
+| `panes[].kind` / `name` | 已检测的 kind 与 live agent name；缺失为 null |
+| `panes[].status` | 当前原始状态，缺失为 `unknown`；未来新状态原样保留 |
+
+默认入口要求 `HERDR_PANE_ID`，通过 `pane current --current` 查询真实调用方，
+不会把旧 `HERDR_WORKSPACE_ID` 或用户当前焦点当成调用方。缺少上下文时请使用
+`--workspace`。数据来自 workspace / pane 查询和**一次**全量 `agent list`，按精确
+pane ID 与 workspace 联接，不会把其它 workspace 的 agent 混进来。
+
+几何通过 `pane layout --pane <选中 workspace 的 pane ID>` 查询，不切焦点。
+只有布局覆盖该 workspace 的全部 pane 时才按 `(y,x)` 排序；多 tab、不完整或不可用
+几何会在 stderr 告警，所有 pane 统一按完整 `pane_id` 的字典序排序，不做数字化或
+大小写折叠。JSON 的 `pane_order` 明确说明实际使用的顺序。
+
+参数错误 exit 2；不存在的 workspace、调用方失效、必需查询的无效 JSON、server
+不可用或超时 exit 1，stdout 不输出半份快照。仅可选几何查询失败时降级并 exit 0。
+这是顺序查询得到的一次快照，运行中状态可能变化；不推算 elapsed、activity 或
+Workflow 完成情况。不会发送 prompt、切换焦点、创建/关闭资源、改配置或安装 hook；
+初版不提供 `--watch`。
 
 ## hopen.sh — 按代号开 herdr pane 布局
 

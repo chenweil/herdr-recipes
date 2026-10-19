@@ -16,7 +16,7 @@
 | §4.6 已有能力测试 | 九布局派位、alias、Dispatch 和失败回滚已覆盖；去除继承重复收集 |
 | §5.4 跨版本契约 | 0.8.2 / 0.9.5 两入口九布局隔离 smoke 通过；0.9.1 为历史记录 |
 | §5.5 README 个人仓声明 | 已有 `Personal recipes` |
-| §3.1 hstatus | [#14](https://github.com/chenweil/herdr-recipes/issues/14) 已立项，待实现；只读查询，不含 hook / watch |
+| §3.1 hstatus | [#14](https://github.com/chenweil/herdr-recipes/issues/14) 已实现并验证；列入 Unreleased，不含 hook / watch |
 | §4.1 / §4.2 / §4.5 | layout 抽表、alias 运行时读取、冲突检测尚未实现 |
 | §3.2 / §3.3 / §3.5 | hook、sidebar、.hopenrc 均为候选，尚未评审 |
 | §3.4 hclean | 与 ADR-0001 排除 cleanup 的边界冲突，需先决策，暂不实施 |
@@ -64,44 +64,21 @@ herdr-projects 在 sidebar 显示 `needs you · ~55%` / `review · PR #4` / `wor
 
 #### 3.1 `hstatus.sh` — 当前 ws 的 pane 总览
 
-**目标**：在一个 pane 里看到当前 ws 的全部 agent 状态摘要，无需切窗。
-
-**契约**：
+**已实现（#14，Unreleased）**：只读文本/JSON 快照，支持 caller 与显式 workspace。
 
 ```bash
-hstatus.sh                    # 当前 ws
-hstatus.sh --workspace <id>   # 指定 ws
-hstatus.sh --json             # JSON 输出，给未来的 popup / TUI 用
+hstatus.sh
+hstatus.sh --workspace w3
+hstatus.sh --json --workspace w3
 ```
 
-**输出形状**（人类可读）：
+一次 `agent list` 按精确 ID 联接 pane；缺失 kind/name 为 null、缺失 status 为 unknown，
+未来状态值原样保留。几何完整时按 `(y,x)` 排序，多 tab 或几何不可用时统一降级为
+完整 pane ID 顺序并告警。不会切焦点、写配置或接管工作完成判断。
 
-```
-ws=w3 (main)  panes=4
-  p1  codex  working   "implement feature A"   12m
-  p2  pi     idle      "review the diff"       2m quiet
-  p3  opencode blocked  "needs approval"        < 1m
-  p4  claude  working   "fix failing CI"        5m
-```
-
-**实现要点**：
-
-| 步骤 | 依赖 | 数据源 |
-|------|------|--------|
-| 读 pane 列表 | herdr 0.9.1+ | `herdr pane list --workspace <id>` |
-| 读 agent 状态 | 已核对 0.9.5 CLI | `herdr agent list` 返回全量，再按 `pane_id` 与 pane 联接；没有 `--pane` 选项 |
-| 读最近 activity | 尚未确认 | 只消费现有查询返回的已验证字段；`report-metadata` 是写入接口，不作为读取接口 |
-| 持续刷新 | `watch` 或 ticker | `hstatus.sh --watch 5` |
-
-**风险**：
-
-- herdr 0.9.1 之前 snapshot 不包含 pane activity tokens（见 `herdr-projects/docs/herdr-notes.md` §4）；要先确认本机版本快照字段
-- `hstatus.sh --watch` 不能阻塞现有 prefix 按键——只跑在 shell pane 里的子进程，按 `q` 退出
-
-**初版范围**：只读的人类摘要与 JSON；缺失 activity / elapsed 字段输出未知，不推算。
-`--watch`、新 hook 和 sidebar 配置后置。
-
-**预估工作量**：小（半天）。不需要 install.sh 改动。
+两种 Herdr 版本（0.8.2 / 0.9.5）的隔离 smoke 覆盖显式查询、真实 caller、多 tab 和
+焦点/配置不变。详细输出契约见 `scripts/README.md`，证据见 `herdr-research.md` §8。
+`--watch`、activity/elapsed 推算、hook 与 sidebar 配置仍不在初版范围。
 
 #### 3.2 Pi / OpenCode 的 progress hook
 
@@ -426,7 +403,7 @@ docs/
 1. 已完成：测试去重、失败回滚与最低版本验证（#13，v0.8.0）。
 2. 已完成：同步事实、候选状态、版本与 Changelog，保留历史证据。
 3. 已发布：[v0.8.0](https://github.com/chenweil/herdr-recipes/releases/tag/v0.8.0)，记录验证范围。
-4. 下一项：[#14](https://github.com/chenweil/herdr-recipes/issues/14) 实现 §3.1 `hstatus`，先交付只读摘要与 JSON。
+4. 已实现并验证：[#14](https://github.com/chenweil/herdr-recipes/issues/14) 的只读 `hstatus` 摘要与 JSON，列入 Unreleased。
 5. layout 抽表、alias 运行时读取和 installer 冲突检测按具体需求再立项。
 
 hook / sidebar / `.hopenrc` 仍是候选；`hclean` 先解决 ADR 边界，PR followup 暂缓。
