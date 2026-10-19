@@ -16,7 +16,7 @@
 | §4.6 已有能力测试 | 九布局派位、alias、Dispatch 和失败回滚已覆盖；去除继承重复收集 |
 | §5.4 跨版本契约 | 0.8.2 / 0.9.5 两入口九布局隔离 smoke 通过；0.9.1 为历史记录 |
 | §5.5 README 个人仓声明 | 已有 `Personal recipes` |
-| §3.1 hstatus | 下一阶段单独立项；先做只读查询，不含 hook / watch |
+| §3.1 hstatus | [#14](https://github.com/chenweil/herdr-recipes/issues/14) 已立项，待实现；只读查询，不含 hook / watch |
 | §4.1 / §4.2 / §4.5 | layout 抽表、alias 运行时读取、冲突检测尚未实现 |
 | §3.2 / §3.3 / §3.5 | hook、sidebar、.hopenrc 均为候选，尚未评审 |
 | §3.4 hclean | 与 ADR-0001 排除 cleanup 的边界冲突，需先决策，暂不实施 |
@@ -423,10 +423,10 @@ docs/
 
 ## 7. 当前落地顺序
 
-1. 测试去重、失败回滚与最低版本验证（#13，v0.8.0）。
-2. 同步事实、候选状态、版本与 Changelog；保留历史证据。
-3. 发布 v0.8.0，记录通过的验证及未覆盖的环境。
-4. 单独立项 §3.1 `hstatus`，先交付只读摘要与 JSON。
+1. 已完成：测试去重、失败回滚与最低版本验证（#13，v0.8.0）。
+2. 已完成：同步事实、候选状态、版本与 Changelog，保留历史证据。
+3. 已发布：[v0.8.0](https://github.com/chenweil/herdr-recipes/releases/tag/v0.8.0)，记录验证范围。
+4. 下一项：[#14](https://github.com/chenweil/herdr-recipes/issues/14) 实现 §3.1 `hstatus`，先交付只读摘要与 JSON。
 5. layout 抽表、alias 运行时读取和 installer 冲突检测按具体需求再立项。
 
 hook / sidebar / `.hopenrc` 仍是候选；`hclean` 先解决 ADR 边界，PR followup 暂缓。
