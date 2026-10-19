@@ -1,5 +1,10 @@
 ## Agent skills
 
+### Herdr Recipes
+
+用户要求用 Herdr 准备布局、组建 agent 团队、后续委托或汇总时，读取
+[`skills/herdr-recipes/SKILL.md`](skills/herdr-recipes/SKILL.md)。
+
 ### Issue tracker
 
 Issues 在本仓库的 GitHub Issues 里跟踪（用 `gh` CLI）。See `docs/agents/issue-tracker.md`.

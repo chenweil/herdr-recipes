@@ -1,7 +1,8 @@
 """Opt-in live model smoke: standby worker, later delegation, and evidence-backed summary.
 
-Requires an authenticated pi worker and coordinator. Uses isolated Herdr state and
-real model calls. Run with --live-agents --binary /path/to/herdr --output /tmp/team.json.
+Requires authenticated pi workers and coordinator. Uses isolated Herdr state and
+real model calls. Add --workers 3 to check top-one/bottom-two worker geometry.
+Run with --live-agents --binary /path/to/herdr --output /tmp/team.json.
 """
 import argparse
 import json
@@ -14,7 +15,8 @@ import time
 parser=argparse.ArgumentParser(description=__doc__)
 parser.add_argument('--binary',required=True)
 parser.add_argument('--output',required=True)
-parser.add_argument('--kind',default='pi',help='coordinator kind; worker is pi')
+parser.add_argument('--kind',default='pi',help='coordinator kind; workers are pi')
+parser.add_argument('--workers',type=int,choices=(1,3),default=1,help='standby workers; three checks top-one/bottom-two geometry')
 parser.add_argument('--live-agents',action='store_true',help='explicitly allow real model calls')
 args=parser.parse_args()
 if not args.live_agents:
@@ -45,7 +47,7 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
                 if (root/'s.sock').exists():break
                 if server.poll() is not None:raise RuntimeError('server exited')
                 time.sleep(.1)
-            initial='验证对话式协调功能：请用 Herdr CLI 在本 tab 的右侧新增一个 worker pane，启动一个 pi worker，为它生成唯一名称，只发送角色说明和待命指令，先不要给计算或代码任务。不要修改任何项目文件，不要提交、推送或安装集成，不调用子 agent 工具替代真实 Herdr pane。准备好后简短汇报，等待我继续委托。'
+            initial=f'验证对话式协调功能：请用 Herdr CLI 在本 tab 的右侧准备 {args.workers} 个 pi worker，为每个生成唯一名称，只发送角色说明和待命指令，先不要给计算或代码任务。不要修改任何项目文件，不要提交、推送或安装集成，不调用子 agent 工具替代真实 Herdr pane。准备好后简短汇报，等待我继续委托。'
             launched=run('bash',str(repo/'scripts/hteam.sh'),'-k',args.kind,'--no-focus','-p',initial,timeout=75)
             print('LAUNCH',launched.strip(),flush=True)
             parts=dict(part.split('=',1) for part in launched.strip().split())
@@ -56,10 +58,11 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
                 panes=cli('pane','list','--workspace',ws)['panes']
                 agents=cli('agent','list')['agents']
                 workers=[a for a in agents if a.get('workspace_id')==ws and a.get('pane_id')!=main]
-                if workers and all(a.get('agent_status') in ('idle','done') for a in agents):break
+                if len(workers)==args.workers and all(a.get('agent_status') in ('idle','done') for a in agents):break
                 time.sleep(2)
-            assert len(workers)==1,('expected one ready worker',len(workers))
-            assert len(panes)==2 and len({p['tab_id'] for p in panes})==1
+            assert len(workers)==args.workers,('expected ready workers',args.workers,len(workers))
+            assert all(a.get('agent_status') in ('idle','done') for a in agents),'agents did not settle'
+            assert len(panes)==args.workers+1 and len({p['tab_id'] for p in panes})==1
             layout=cli('pane','layout','--pane',main)['layout']
             rects={p['pane_id']:p['rect'] for p in layout['panes']}
             left=min(r['x'] for r in rects.values())
@@ -70,9 +73,20 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
             assert main_rect['x']==left and main_rect['y']==top
             assert main_rect['height']==bottom-top and abs(main_rect['width']-(right-left)/2)<=1
             report['main_left_half']=True
+            if args.workers==3:
+                actual=sorted((r['x']-left,r['y']-top,r['width'],r['height'])
+                              for pane,r in rects.items() if pane!=main)
+                width=right-left; height=bottom-top
+                expected=sorted((x*width,y*height,w*width,h*height) for x,y,w,h in
+                                ((.5,0,.5,.5),(.5,.5,.25,.5),(.75,.5,.25,.5)))
+                assert len(actual)==3 and all(abs(a-e)<=1 for got,want in zip(actual,expected)
+                                             for a,e in zip(got,want)),('top-one/bottom-two layout mismatch',actual,expected)
+                report['worker_layout']='top-one-bottom-two'
+            report['worker_count']=args.workers
+            report['panes']={pane:rect for pane,rect in rects.items()}
             worker=workers[0].get('name') or workers[0]['pane_id']
             print('STANDBY_READY',worker,flush=True)
-            later='现在把任务 T2 委托给刚才的待命 worker：让它计算十九乘二十三，仅输出 TEAM_PROBE_RESULT: 后跟计算结果。你必须通过 Herdr agent prompt 委托并读取该 worker 的实际输出，不能自己代替 worker 计算。拿到结果后，你在主 pane 输出 TEAM_SUMMARY: 后跟结果。不要修改文件或再开 worker。'
+            later=f'现在把任务 T2 委托给待命 worker {worker}：让它计算十九乘二十三，仅输出 TEAM_PROBE_RESULT: 后跟计算结果。你必须通过 Herdr agent prompt 委托并读取该 worker 的实际输出，不能自己代替 worker 计算。拿到结果后，你在主 pane 输出 TEAM_SUMMARY: 后跟结果。其它 worker 继续待命。不要修改文件或再开 worker。'
             cli('agent','prompt',coordinator,later)
             deadline=time.monotonic()+150
             success=False
@@ -83,7 +97,7 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
                     success=True;break
                 time.sleep(2)
             assert success,'delegation/result summary markers not observed'
-            assert len(cli('pane','list','--workspace',ws)['panes'])==2
+            assert len(cli('pane','list','--workspace',ws)['panes'])==args.workers+1
             assert len(cli('workspace','list')['workspaces'])==1
             report.update(workspace=ws,main=main,worker=worker,standby_prepared=True,later_delegation=True,worker_result=437,coordinator_summary=437,same_tab=True)
             print('DELEGATION_AND_SUMMARY_OK',flush=True)

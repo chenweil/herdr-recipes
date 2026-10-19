@@ -65,7 +65,8 @@ hteam.sh --no-focus                # 准备后不切换用户当前焦点
 启动器只创建一个 workspace、一个 tab 和一个协调 pane，通过共用 `_start_agent`
 注入 `coordinator-prompt.md`、精确 workspace/tab/pane ID、cwd 和工具路径。默认
 没有工作任务，协调者应等待用户，不自行创建 worker。新增 worker 由协调者使用
-Herdr CLI 在同 tab 的右半区完成；主 pane 保留左半区，四个 worker 时优先上二下二。
+Herdr CLI 在同 tab 的右半区完成；主 pane 保留左半区，三个 worker 是上一个、下两个，
+四个 worker 是上二下二。具体分裂顺序维护在协调模板中；汇报布局前读取实际 pane rect 核验。
 这类布局和派工是模型遵循模板的行为，不是 shell 中的确定性调度规则或权限隔离。
 
 模板可直接阅读和修改。它要求每次委托携带任务 ID、目标、文件范围、交付与验证
@@ -80,6 +81,9 @@ exit 1，保留 workspace 供检查，并在 stderr 标出 ID；创建前的参�
 
 真实 pi 协调者 / pi worker 已在 Herdr 0.9.5 验证“先待命 → 后委托 → 读取并汇总”。
 完整链路可用 `tests/smoke_hteam.py --live-agents` 显式复验，会调用真实模型；
+加 `--workers 3` 会在后续委托前断言三个 worker 的实际“上一个、下两个”几何，
+主 pane 仍须占左半区。该断言已在修复前真实模型产生的三层堆叠布局上报错。
+修复后 pi 主协调者 + 三个 pi worker 的几何、待命、后续委托与汇总均通过。
 其它 kind 和四 worker 布局尚未完成模型行为实测，详见 research §9。
 
 本入口不引入后台 worker 服务、持久化任务队列、自动重试或断线恢复；交互模型是否

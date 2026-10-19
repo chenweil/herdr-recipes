@@ -10,6 +10,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/hteam.sh` | Start one conversational coordinator that prepares workers and delegates through Herdr |
 | `scripts/coordinator-prompt.md` | Inspectable instructions for worker preparation, later delegation and evidence-based summaries |
+| `skills/herdr-recipes/SKILL.md` | Natural-language entry to Recipes and conversational coordination, alongside the global herdr skill |
 | `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
@@ -51,6 +52,8 @@ Talk to the main pane afterward: “把登录实现交给第一个 worker，第�
 then “汇总进度和验证结果”. The coordinator can prepare idle workers first and delegate
 later, choosing how many panes to open or reuse in the same tab. The main pane keeps
 the left half when workers are added; workers share the right half.
+Three workers use one top pane and two side-by-side bottom panes; four use a 2×2 grid.
+The coordinator must inspect actual pane rectangles before reporting or drawing the layout.
 
 The launcher bootstraps one coordinator only. Worker management is performed by the
 interactive agent under [the coordinator instructions](scripts/coordinator-prompt.md),
@@ -59,6 +62,40 @@ is added. Startup success is Recipe Ready, not completion of the delegated work.
 See [ADR-0002](docs/adr/0002-conversational-coordinator.md). The pi-coordinator/pi-worker
 standby → later delegation → result summary flow was verified on Herdr 0.9.5;
 other agent kinds remain subject to their tool and approval configuration.
+
+## Project skill (`herdr-recipes`)
+
+The [project skill](skills/herdr-recipes/SKILL.md) complements the global `herdr` skill:
+it chooses the Recipe/team/status entry point and shares the coordinator instructions.
+Inside Herdr, the current agent can become the coordinator; an explicit new-team request
+uses `hteam.sh`. The `-k` on that launcher selects the main agent, while the request determines
+worker kinds and count. General Herdr CLI knowledge stays in the global skill.
+
+Enable project discovery with a local link from the repository root (leave any existing
+`herdr-recipes` entry intact and inspect it first):
+
+```bash
+mkdir -p .agents/skills
+ln -s ../../skills/herdr-recipes .agents/skills/herdr-recipes
+```
+
+The source is tracked in `skills/`; `.agents/` stays local and ignored. Refresh the agent's
+skill list or start a new conversation if needed. Other agent hosts can load the canonical
+`SKILL.md` explicitly or link the same source in their own skill directory. `install.sh`
+continues to install scripts/key bindings; it does not install this skill globally.
+
+Example requests after loading `$herdr-recipes`:
+
+- “在当前 tab 先准备两个 codex 和一个 pi，全部待命。”
+- “分析这个需求，由你决定需要几个 worker，最多三个，先只读分析。”
+- “新建一个 pi 主协调团队，先准备两个 codex，暂时不要工作。”
+- “让实现员处理 T1，复核员等实现后审查，读取实际结果后汇总。”
+
+For manual acceptance, run the first request in a Herdr agent: verify that the caller's
+workspace/tab and existing panes are preserved, three workers receive standby roles, and
+no implementation work starts. Then delegate a small read-only task and check worker output
+before accepting the coordinator's summary. These skill-driven paths still need live model
+validation; the earlier hteam pi/pi smoke covers the launcher path, not skill discovery.
 
 ## Workspace status (`hstatus.sh`)
 

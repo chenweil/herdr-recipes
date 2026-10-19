@@ -584,3 +584,33 @@ python3 tests/smoke_hteam.py --live-agents --binary /path/to/herdr --output /tmp
 当前实测是 pi/pi + Herdr 0.9.5；默认 codex 的启动参数与角色注入由 fixture 覆盖，
 未宣称所有 kind 或四 worker 四宫格的模型行为都已完成实测。模板的 tab 范围与布局
 是对交互 agent 的约束，不是操作系统级权限隔离或确定性的后台调度规则。
+
+### 三 worker 几何回归（2026-10-19，issue #16）
+
+用户截图显示：协调者画出的右侧“上一个、下两个”与实际三层堆叠不符。旧模板只定义
+四 worker 四宫格，缺少三 worker 的分裂顺序和汇报前的实际几何核验。
+
+将真实模型 smoke 扩展为 `--workers 3`，初始请求只要求准备三个 pi 待命，不向请求中
+额外提示目标几何；断言来自用户确认的布局。修复前实际失败，右侧矩形为
+`(60,0,60,10)`、`(60,10,60,10)`、`(60,20,60,20)`，证明能拦截真实模型的堆叠结果。
+
+共用模板补齐逐步分裂及 `pane layout` 核验后，同一命令通过：
+
+```bash
+python3 tests/smoke_hteam.py --live-agents --binary /opt/homebrew/bin/herdr \
+  --workers 3 --output /tmp/hteam-three.json
+```
+
+Herdr 0.9.5、pi 主协调者 + 三个 pi worker，120×40 的实际矩形：
+
+| pane | x | y | width | height |
+|---|---|---|---|---|
+| 主 pane | 0 | 0 | 60 | 40 |
+| 右上 | 60 | 0 | 60 | 20 |
+| 右下左 | 60 | 20 | 30 | 20 |
+| 右下右 | 90 | 20 | 30 | 20 |
+
+随后将计算委托给其中一个待命 worker，实际观察到 worker 的 `TEAM_PROBE_RESULT: 437`
+和主 pane 的 `TEAM_SUMMARY: 437`，同 tab、四个 pane、测试服务清理均通过。
+6 项 hteam 契约测试通过（4.060 秒）。本次验证 hteam 注入新模板后的模型执行，
+不等同于所有 kind、已有会话重新加载 skill 或四 worker 布局已验收。
