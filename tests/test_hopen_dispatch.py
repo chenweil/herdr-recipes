@@ -10,6 +10,8 @@ import unittest
 
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[1]
 HOPEN_ONCE = REPO_ROOT / "scripts" / "hopen-once.sh"
+HOPEN_SH = REPO_ROOT / "scripts" / "hopen.sh"
+HOPEN_ONCE_SH = HOPEN_ONCE
 HOPEN = REPO_ROOT / "scripts" / "hopen.sh"
 
 FAKE_HERDR = textwrap.dedent(
@@ -175,6 +177,47 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         self.assertEqual(result.returncode, 0)
         self.assertEqual(kinds, ["opencode", "pi"])
 
+    def assert_five_pane_geometry(self, calls, code):
+        """Replay actual split arguments; the single pane and 2x2 grid each own half.
+
+        This models CLI geometry independently of the stub, which only returns IDs.
+        Live Herdr smoke checks validate the model's rounding separately.
+        """
+        splits = self.calls_for(calls, "pane", "split")
+        workspace = splits[0][2].rsplit(":", 1)[0]
+        positions = {
+            "221": [(0, 0, 1, 1), (1, 0, 1, 1), (2, 0, 2, 2),
+                    (0, 1, 1, 1), (1, 1, 1, 1)],
+            "122": [(0, 0, 2, 2), (2, 0, 1, 1), (3, 0, 1, 1),
+                    (3, 1, 1, 1), (2, 1, 1, 1)],
+        }
+        for width, height in ((120, 40), (124, 44), (123, 41)):
+            with self.subTest(layout=code, size=(width, height)):
+                rectangles = {f"{workspace}:p1": (0, 0, width, height)}
+                for index, call in enumerate(splits, start=2):
+                    parent = call[2]
+                    x, y, w, h = rectangles[parent]
+                    ratio = float(call[call.index("--ratio") + 1]) if "--ratio" in call else 0.5
+                    direction = call[call.index("--direction") + 1]
+                    if direction == "right":
+                        retained = int(w * ratio + 0.5)
+                        rectangles[parent] = (x, y, retained, h)
+                        new = (x + retained, y, w - retained, h)
+                    else:
+                        self.assertEqual(direction, "down")
+                        retained = int(h * ratio + 0.5)
+                        rectangles[parent] = (x, y, w, retained)
+                        new = (x, y + retained, w, h - retained)
+                    rectangles[f"{workspace}:p{index}"] = new
+                tolerance = 0 if width % 4 == 0 and height % 2 == 0 else 1
+                for index, (x, y, w, h) in enumerate(positions[code], start=1):
+                    expected = (x * width / 4, y * height / 2,
+                                w * width / 4, h * height / 2)
+                    actual = rectangles[f"{workspace}:p{index}"]
+                    for found, wanted in zip(actual, expected):
+                        self.assertAlmostEqual(found, wanted, delta=tolerance,
+                                               msg=f"{code}: p{index}: {actual} != {expected}")
+
     def test_layout_221_builds_five_panes_and_dispatches_in_visual_order(self):
         result = self.run_launcher(
             HOPEN_ONCE,
@@ -198,6 +241,7 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         names = [call[2] for call in starts]
 
         self.assertEqual(result.returncode, 0)
+        self.assert_five_pane_geometry(calls, "221")
         self.assertEqual(
             split_targets,
             [
@@ -245,6 +289,7 @@ class FakeHerdrLauncherTests(unittest.TestCase):
         names = [call[2] for call in starts]
 
         self.assertEqual(result.returncode, 0)
+        self.assert_five_pane_geometry(calls, "122")
         self.assertEqual(
             split_targets,
             [
@@ -830,6 +875,100 @@ class LayoutVisualOrderContractTests(FakeHerdrLauncherTests):
                         f"  hopen.sh map:      {conf_kind_pane}"
                     ),
                 )
+
+
+class ThreePaneColumnRatioTests(FakeHerdrLauncherTests):
+    """`13` / `31` 的三 pane 列必须走显式 ratio，而不是连续两次对半切。
+
+    连续对半切会把那一列切成 50% / 25% / 25%，与其它布局「每列等分」的
+    视觉契约不符。做法是先切走 1/3（0.333），再把剩下的 2/3 对半切（0.5）。
+    实测 40 行 → 13 / 14 / 13。
+    """
+
+    def split_ratios(self, code):
+        # 日志是追加写的，跑之前清掉，否则上一个 layout 的 split 会混进来
+        self.log_path.unlink(missing_ok=True)
+        result = self.run_launcher(HOPEN_SH, code, "-n")
+        self.assertEqual(result.returncode, 0, msg=result.stderr)
+        ratios = []
+        for call in self.calls_for(self.read_calls(), "pane", "split"):
+            ratios.append(call[call.index("--ratio") + 1] if "--ratio" in call else None)
+        return ratios
+
+    def test_13_and_31_pass_explicit_ratio_for_the_three_pane_column(self):
+        for code in ("13", "31"):
+            with self.subTest(layout=code):
+                self.assertEqual(
+                    self.split_ratios(code),
+                    [None, "0.333", "0.5"],
+                    msg=f"{code}: 第一步是左右对半列，不带 ratio；第二三步是三 pane 列",
+                )
+
+    def test_layouts_without_explicit_ratios(self):
+        """这些布局保留默认比例；221 另用 ratio 保证单 pane 与四宫格各占一半。"""
+        for code in ("11", "12", "21", "22", "111", "122"):
+            with self.subTest(layout=code):
+                ratios = self.split_ratios(code)
+                self.assertNotIn("0.333", ratios)
+                self.assertNotIn("0.5", ratios)
+                self.assertTrue(all(r is None for r in ratios), msg=f"{code}: {ratios}")
+
+
+class LauncherArgumentTests(FakeHerdrLauncherTests):
+    """hopen.sh 的参数解析与 --help 输出。"""
+
+    def write_conf_with_kind(self):
+        self.write_conf(
+            """
+            [layout.11.panes.left]
+            kind = "pi"
+            """
+        )
+
+    def test_no_agents_flag_is_honoured_after_the_layout_code(self):
+        """`hopen.sh <code> [-n]` 是头部注释声明的用法。
+
+        参数解析器曾在遇到第一个非选项参数（layout 代号）时 break，
+        导致写在代号后面的 -n 被**静默忽略** —— 该跳过的 agent 被真的启起来。
+        """
+        self.write_conf_with_kind()
+
+        with_flag = self.run_launcher(HOPEN_SH, "11", "-n")
+        self.assertEqual(with_flag.returncode, 0, msg=with_flag.stderr)
+        self.assertEqual(
+            self.calls_for(self.read_calls(), "agent", "start"),
+            [],
+            msg="代号后面的 -n 必须生效",
+        )
+
+        self.log_path.unlink(missing_ok=True)
+        without_flag = self.run_launcher(HOPEN_SH, "11")
+        self.assertEqual(without_flag.returncode, 0, msg=without_flag.stderr)
+        self.assertEqual(
+            len(self.calls_for(self.read_calls(), "agent", "start")),
+            1,
+            msg="不给 -n 时应按 conf 派位",
+        )
+
+    def test_extra_positional_argument_is_rejected(self):
+        result = self.run_launcher(HOPEN_SH, "11", "22")
+        self.assertEqual(result.returncode, 2)
+        self.assertIn("多余参数", result.stderr)
+
+    def test_help_prints_the_whole_header_comment_block(self):
+        """--help 不能靠写死的行号截断头部注释。
+
+        曾用 `sed -n '2,19p'`，而头部注释早已长到 31 行，后半段用法说明
+        和 6 条设计原则被静默吃掉。
+        """
+        for script, last_line in (
+            (HOPEN_SH, "#   6. 成功创建的 ws 不由脚本自动清理"),
+            (HOPEN_ONCE_SH, "#   - Kinds placed in row-major visual order"),
+        ):
+            with self.subTest(script=script.name):
+                result = self.run_launcher(script, "--help")
+                self.assertEqual(result.returncode, 0, msg=result.stderr)
+                self.assertIn(last_line, result.stdout)
 
 
 if __name__ == "__main__":

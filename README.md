@@ -57,6 +57,17 @@ Each digit is the number of panes in one column, read from left to right:
 | `221` | 5 | `[A/B][C/D][E]` | left-top / middle-top / right / left-bottom / middle-bottom |
 | `122` | 5 | `[A][B/C][D/E]` | left / middle-top / right-top / middle-bottom / right-bottom |
 
+`221` and `122` pair a full-height pane with a 2×2 grid, each occupying 50% of
+the workspace width. `221` has the grid on the left (column widths 25% / 25% / 50%);
+`122` has the grid on the right (50% / 25% / 25%). Terminal rounding may differ
+by one cell.
+
+Panes within a column always split that column evenly. `13` and `31` are the only
+layouts with three panes in one column, so they pass an explicit split ratio
+instead of splitting twice in half — a plain double split would give that column
+50% / 25% / 25%. On a 40-row column the three panes come out 13/14/13; the exact
+numbers follow the terminal height, but the three stay within one row of each other.
+
 Position names are what you use in `hopen-agents.conf` section headers and what
 unnamed panes fall back to as their label.
 

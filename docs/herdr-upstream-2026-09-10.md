@@ -122,9 +122,10 @@ navigator、pane 分裂、named target 在大 session 里都快了；外部事�
 - **Codex 不再装 turn hook（0.9.5，#5246 #5278）** — 状态检测回到屏幕检测，
   release notes 明确要求 `herdr integration install codex` 更新。已执行（2026-10-19）。
 - **关闭 workspace 最后一个 pane 会先确认（0.9.4，#5143 #5173）** — 可用
-  `ui.confirm_close = false` 关掉。**`hopen.sh` 的回滚路径要留意**：它在 split 失败时
-  调 `herdr pane close` / `workspace close` 并 `|| true` 静默吞错，若确认弹窗导致关闭
-  失败，临时 workspace 会泄漏且无提示。
+  `ui.confirm_close = false` 关掉。**但这只影响 TUI 手动关闭**：实测 CLI 路径
+  （`herdr pane close`）不弹确认，关掉最后一个 pane 会连带销毁 workspace，随后的
+  `herdr workspace close` 返回 `workspace_not_found`。`hopen.sh` 的回滚路径因此改成
+  直接 `workspace close`（它会连同所有 pane 一起关），不再先逐 pane 关。
 - **主 workspace 关闭时的 worktree 组语义（0.9.4，#4926 #4770）** — 打开同一仓库两次
   不再互相嵌套；worktree 组在 checkout 暂不可用时存活。
 - **会话恢复逐个启动（0.9.2，#4102）** + **48 份布局快照**（0.9.2，#4320）——

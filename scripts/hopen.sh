@@ -9,12 +9,12 @@
 #   11   左 1 + 右 1    [A][B]
 #   12   左 1 + 右 2    [A][B / C]
 #   21   右 1 + 左 2    [A / B][C]
-#   13   左 1 + 右 3    [A][B / C / D]
-#   31   右 1 + 左 3    [A / B / C][D]
+#   13   左 1 + 右 3    [A][B / C / D]   右列三等分（误差 1 行）
+#   31   右 1 + 左 3    [A / B / C][D]   左列三等分（误差 1 行）
 #   22   2x2            [A / B][C / D]
 #   111  三列各一        [A][B][C]
-#   221  三列 2/2/1      [A / B][C / D][E]
-#   122  三列 1/2/2      [A][B / C][D / E]
+#   221  左四宫格 + 右 1  [A / B][C / D][E]   两区各占 50%，列宽 25/25/50
+#   122  左 1 + 右四宫格  [A][B / C][D / E]   两区各占 50%，列宽 50/25/25
 #
 # Agent 启动：hopen.sh 跑完布局后读 hopen-agents.conf，按 section 启动 agent。
 #   conf 缺失 / section 缺失 / pane 没在 conf 里 → 跳过；
@@ -66,9 +66,26 @@ _h_ws() {
   jq -r '"\(.result.workspace.workspace_id) \(.result.root_pane.pane_id) \(.result.tab.tab_id)"' <<<"$out"
 }
 
+# 打印头部注释块（第 2 行起连续的 `#` 行）。
+# 不写死行号——头部注释一旦增删，写死的 `sed -n '2,19p'` 就会静默截断，
+# 把后半段用法说明和设计原则悄悄吃掉。
+print_help() {
+  awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "${BASH_SOURCE[0]:-$0}"
+}
+
+# _h_split <parent_pane> <direction> [ratio]
+# ratio 是**被分裂的 pane 保留的比例**（Herdr 语义，实测：40 行 split
+# --ratio 0.333 → 目标 pane 留 13 行，新 pane 拿 27 行）。不传就用 Herdr
+# 默认的 0.5。
 _h_split() {
-  herdr pane split "$1" --direction "$2" --no-focus \
-    | jq -r '.result.pane.pane_id'
+  local parent="$1" direction="$2" ratio="${3:-}"
+  if [ -n "$ratio" ]; then
+    herdr pane split "$parent" --direction "$direction" --ratio "$ratio" --no-focus \
+      | jq -r '.result.pane.pane_id'
+  else
+    herdr pane split "$parent" --direction "$direction" --no-focus \
+      | jq -r '.result.pane.pane_id'
+  fi
 }
 
 # 从 path 推导 ws 标签：git repo 用分支名，否则用 basename（最后一层目录名）。
@@ -154,11 +171,17 @@ _h_build_layout() {
   # 多个项目同时开着的时候一眼能分清。
   herdr tab rename "$tab_id" "$tab_label" >/dev/null 2>&1 || true
 
-  local created=("$root_pane") parent="$root_pane" pid parent_tok direction line
+  local created=("$root_pane") parent="$root_pane" pid parent_tok direction ratio rest line
   while IFS= read -r line; do
     [ -z "$line" ] && continue
     parent_tok="${line%% *}"
-    direction="${line#* }"
+    rest="${line#* }"
+    direction="${rest%% *}"
+    # 第三列是可选 ratio；没有就留空，_h_split 走 Herdr 默认 0.5。
+    ratio=""
+    case "$rest" in
+      *' '*) ratio="${rest#* }" ;;
+    esac
     case "$parent_tok" in
       ROOT) parent="$root_pane" ;;
       LAST) parent="$pid"      ;;
@@ -173,11 +196,16 @@ _h_build_layout() {
         ;;
       *) echo "hopen: 内部错 parent_tok=$parent_tok" >&2; return 1 ;;
     esac
-    pid=$(_h_split "$parent" "$direction") || {
+    pid=$(_h_split "$parent" "$direction" "$ratio") || {
       echo "hopen: split 失败，开始回滚" >&2
-      local p
-      for p in "${created[@]:-}"; do herdr pane close "$p" >/dev/null 2>&1 || true; done
-      herdr workspace close "$ws_id" >/dev/null 2>&1 || true
+      # 关掉 workspace 会连带关掉里面所有 pane（实测：关最后一个 pane 会销毁
+      # workspace），所以优先关 ws；万一失败再逐 pane 兜底。反过来先关 pane
+      # 的话，最后一次 workspace close 必然返回 workspace_not_found。
+      if ! herdr workspace close "$ws_id" >/dev/null 2>&1; then
+        local p
+        for p in "${created[@]:-}"; do herdr pane close "$p" >/dev/null 2>&1 || true; done
+        herdr workspace close "$ws_id" >/dev/null 2>&1 || true
+      fi
       return 1
     }
     created+=("$pid")
@@ -206,31 +234,40 @@ _h_build_layout() {
 }
 
 # layout 代号 -> step 列表
-# 每步格式：<parent_token> <direction>
+# 每步格式：<parent_token> <direction> [ratio]
 #   parent_token: ROOT  (从 root 分裂)
 #                 LAST  (从上一个创建的 pane 分裂)
 #                 PANE<n> (从 created[] 的指定索引分裂)
 #   direction:    right / down
+#   ratio:        可选。被分裂的 pane **保留**的比例（Herdr 语义）；省略则
+#                 用 Herdr 默认 0.5。
+#
+# `13` / `31` 需要显式 ratio：一个列里塞 3 个 pane 时，连续两次「对半
+# 切」会得到 50% / 25% / 25% 而不是三等分。做法是先切走 1/3（0.333），再把
+# 剩下的 2/3 对半切（0.5），三段在误差内相等（40 行 → 13 / 13 / 14）。
+# `221` 的单 pane 与四宫格各占一半：先保留左列 1/4，再把剩下的 3/4
+# 按 1/3 分成中列 1/4、右列 1/2。这样创建顺序不变，列宽为 25/25/50。
+# `122` 沿用两次对半切，列宽为 50/25/25，其余布局也沿用默认比例。
 #
 # 11: [A][B]              -> ROOT right (B)
 # 12: [A][B/C]            -> ROOT right (B), LAST down (C)
 # 21: [A/B][C]            -> ROOT right (C), ROOT down (B)   ← 镜像，先抢右列
-# 13: [A][B/C/D]          -> ROOT right (B), LAST down (C), LAST down (D)
-# 31: [A/B/C][D]          -> ROOT right (D), ROOT down (B), LAST down (C)
+# 13: [A][B/C/D]          -> ROOT right (B), LAST down 0.333 (C), LAST down 0.5 (D)
+# 31: [A/B/C][D]          -> ROOT right (D), ROOT down 0.333 (B), LAST down 0.5 (C)
 # 22: [A/B][C/D]          -> ROOT right (C), LAST down (D), ROOT down (B)
 # 111: [A][B][C]          -> ROOT right (B), LAST right (C)
-# 221: [A/B][C/D][E]      -> ROOT right (C), LAST right (E), ROOT down (B), PANE1 down (D)
+# 221: [A/B][C/D][E]      -> ROOT right 0.25 (C), LAST right 1/3 (E), ROOT down (B), PANE1 down (D)
 # 122: [A][B/C][D/E]      -> ROOT right (B), LAST right (D), PANE2 down (E), PANE1 down (C)
 _steps_for() {
   case "$1" in
     11)  printf 'ROOT right\n' ;;
     12)  printf 'ROOT right\nLAST down\n' ;;
     21)  printf 'ROOT right\nROOT down\n' ;;
-    13)  printf 'ROOT right\nLAST down\nLAST down\n' ;;
-    31)  printf 'ROOT right\nROOT down\nLAST down\n' ;;
+    13)  printf 'ROOT right\nLAST down 0.333\nLAST down 0.5\n' ;;
+    31)  printf 'ROOT right\nROOT down 0.333\nLAST down 0.5\n' ;;
     22)  printf 'ROOT right\nLAST down\nROOT down\n' ;;
     111) printf 'ROOT right\nLAST right\n' ;;
-    221) printf 'ROOT right\nLAST right\nROOT down\nPANE1 down\n' ;;
+    221) printf 'ROOT right 0.25\nLAST right 0.3333333333333333\nROOT down\nPANE1 down\n' ;;
     122) printf 'ROOT right\nLAST right\nPANE2 down\nPANE1 down\n' ;;
     *)
       echo "hopen: 未知布局 '$1'。支持: 11 12 13 21 31 22 111 221 122" >&2
@@ -465,7 +502,7 @@ hopen() {
         return 0
         ;;
       --help|-h)
-        sed -n '2,19p' "${BASH_SOURCE[0]:-$0}"
+        print_help
         return 0
         ;;
       --) shift; break ;;
@@ -473,7 +510,15 @@ hopen() {
         echo "hopen: 未知选项 '$1'。支持: --no-agents/-n / --version/-v / --help/-h" >&2
         return 2
         ;;
-      *) code="$1"; shift; break ;;
+      *)
+        # 第一个非选项参数是 layout 代号；之后**继续**解析选项。
+        # 头部用法写的是 `hopen.sh <code> [-n]`，若在这里 break，
+        # 写在代号后面的 -n 会被静默忽略 → 真的把 agent 启起来。
+        if [ -n "$code" ]; then
+          echo "hopen: 多余参数 '$1'。用法: hopen <11|12|13|21|31|22|111|221|122> [--no-agents|-n]" >&2
+          return 2
+        fi
+        code="$1"; shift ;;
     esac
   done
 

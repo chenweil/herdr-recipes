@@ -9,8 +9,32 @@
 
 ## [Unreleased]
 
+### 修复
+
+- **`hopen.sh <code> -n` 里的 `-n` 被静默忽略**。参数解析器遇到第一个非选项
+  参数（layout 代号）就 `break`，写在代号后面的选项再也没人解析。头部注释声明的
+  用法正是 `bash hopen.sh <code> [--no-agents|-n]`，所以「只开布局不起 agent」这条
+  最常用的路径实际上会**真的把 conf 里的 agent 启起来**。现在第一个非选项参数取作
+  代号后继续解析选项，第二个非选项参数明确报错。
+- **`--help` 靠写死行号截断头部注释**。`hopen.sh` 用 `sed -n '2,19p'`，而头部已长到
+  31 行，后半段用法说明和 6 条设计原则被静默吃掉；`hopen-once.sh` 的 `'2,71p'`
+  同样少两行。改成 awk「从第 2 行起连续打印 `#` 行」，加注释不会再失配。
+- **split 失败后的回滚多一次注定失败的调用**。实测关闭 workspace 的最后一个 pane
+  会连带销毁 workspace，紧接的 `herdr workspace close` 必然返回 `workspace_not_found`。
+  改成直接 `workspace close`（实测会连同所有 pane 一起关），失败才逐 pane 兜底。
+
 ### 变更
 
+- **`13` / `31` 的三 pane 列改成真三等分**。原先连续两次对半切，实际几何是
+  50% / 25% / 25%，与文档里的 `[A][B/C/D]` 以及其它布局「每列等分」的视觉契约冲突
+  （`122` 的两列、`221` 的前两列都是等分的）。改用 Herdr 的 `pane split --ratio`
+  （语义是**被分裂的 pane 保留**的比例）：先切走 1/3（`0.333`），再把剩下的 2/3
+  对半切（`0.5`）。120×40 下实测 `13` / `31` 从 20/10/10 变为 13/14/13。
+  `_steps_for` 的每行从两列变成 `<parent> <direction> [ratio]`；**创建顺序不变**，
+  故 `_position_for` / `_h_row_major` 的映射未动。
+- **`221` 调整为左四宫格 50% + 右通高 pane 50%**，列宽从 50/25/25 改为
+  25/25/50，与 `122`（左通高 pane 50% + 右四宫格 50%）互为镜像。pane 创建
+  顺序、位置名与 agent 派位保持一致；几何回归检查覆盖两种布局与奇偶终端尺寸。
 - **版本口径拆成「契约下限」与「实测推荐」两档**。`config/agent-catalog.json` 新增
   `recommended_herdr_version`（0.9.5），`min_herdr_version` 仍是 0.8.2 不动。
   `install.sh` 不再硬编码版本号，改为从 catalog 读，报错文案跟着 catalog 走。
@@ -25,6 +49,8 @@
   传 target，9 个布局的 pane 数与按 `(y,x)` 排序的自然顺序与 0.9.1 记录逐条一致。
   细节见 `docs/herdr-research.md` 的「九布局 smoke matrix（Herdr 0.9.5）」节。
 - `docs/herdr-research.md` 头部验证环境补上 0.9.5，状态行补 #10 已核销。
+- 更正一条上游判断：0.9.4 #5143 的 `ui.confirm_close` 只影响 TUI 手动关闭，
+  CLI 路径不弹确认（见「修复」小节的回滚条目）。
 
 ### 新增
 

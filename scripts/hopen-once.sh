@@ -107,8 +107,11 @@ PROMPTS=()
 NAMES=()        # pane label 列表，跟 KINDS[] 同索引（视觉顺序）
 PATH_ARG="."     # 默认当前目录；相对/绝对路径都可以
 
+# 打印头部注释块（第 2 行起连续的 `#` 行）。
+# 不写死行号——头部注释一旦增删，写死的 `sed -n '2,19p'` 就会静默截断，
+# 把后半段用法说明和设计原则悄悄吃掉。
 print_help() {
-  sed -n '2,71p' "${BASH_SOURCE[0]}"
+  awk 'NR > 1 && /^#/ { print; next } NR > 1 { exit }' "${BASH_SOURCE[0]:-$0}"
 }
 
 # 把 --path 解析成绝对路径：展开 ~，相对路径相对当前 $PWD 解析，最后 cd && pwd 规范化。
