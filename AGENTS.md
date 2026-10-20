@@ -2,7 +2,7 @@
 
 ### Herdr Recipes
 
-用户要求用 Herdr 准备布局、组建 agent 团队、后续委托或汇总时，读取
+用户要求用 Herdr 准备布局、组建 agent 团队、跨 tab/worktree 拆分任务、后续委托或汇总时，读取
 [`skills/herdr-recipes/SKILL.md`](skills/herdr-recipes/SKILL.md)。
 
 ### Issue tracker

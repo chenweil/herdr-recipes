@@ -17,6 +17,7 @@ parser.add_argument('--binary',required=True)
 parser.add_argument('--output',required=True)
 parser.add_argument('--kind',default='pi',help='coordinator kind; workers are pi')
 parser.add_argument('--workers',type=int,choices=(1,3),default=1,help='standby workers; three checks top-one/bottom-two geometry')
+parser.add_argument('--timeout',type=int,default=240,help='seconds per phase, including local evidence records')
 parser.add_argument('--live-agents',action='store_true',help='explicitly allow real model calls')
 args=parser.parse_args()
 if not args.live_agents:
@@ -25,6 +26,7 @@ repo=pathlib.Path(__file__).resolve().parents[1]
 binary=str(pathlib.Path(args.binary).resolve())
 with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
     root=pathlib.Path(folder)
+    project=root/'project';project.mkdir()
     config=root/'config.toml';config.write_text('[keys]\nprefix="ctrl+b"\n')
     env={k:v for k,v in os.environ.items() if not k.startswith('HERDR_')}
     env.update(HERDR_SOCKET_PATH=str(root/'s.sock'),HERDR_CONFIG_PATH=str(config),XDG_CONFIG_HOME=str(root/'config'),XDG_STATE_HOME=str(root/'state'))
@@ -47,12 +49,12 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
                 if (root/'s.sock').exists():break
                 if server.poll() is not None:raise RuntimeError('server exited')
                 time.sleep(.1)
-            initial=f'验证对话式协调功能：请用 Herdr CLI 在本 tab 的右侧准备 {args.workers} 个 pi worker，为每个生成唯一名称，只发送角色说明和待命指令，先不要给计算或代码任务。不要修改任何项目文件，不要提交、推送或安装集成，不调用子 agent 工具替代真实 Herdr pane。准备好后简短汇报，等待我继续委托。'
-            launched=run('bash',str(repo/'scripts/hteam.sh'),'-k',args.kind,'--no-focus','-p',initial,timeout=75)
+            initial=f'验证对话式协调功能：请用 Herdr CLI 在本 tab 的右侧准备 {args.workers} 个 pi worker，为每个生成唯一名称，只发送角色说明和待命指令，先不要给计算或代码任务。只允许写本地执行记录，不修改项目源码，不要提交、推送或安装集成，不调用子 agent 工具替代真实 Herdr pane。准备好后简短汇报，等待我继续委托。'
+            launched=run('bash',str(repo/'scripts/hteam.sh'),'-C',str(project),'-k',args.kind,'--no-focus','-p',initial,timeout=75)
             print('LAUNCH',launched.strip(),flush=True)
             parts=dict(part.split('=',1) for part in launched.strip().split())
             ws=parts['ws'];coordinator=parts['coordinator'];main=parts['panes']
-            deadline=time.monotonic()+150
+            deadline=time.monotonic()+args.timeout
             workers=[]
             while time.monotonic()<deadline:
                 panes=cli('pane','list','--workspace',ws)['panes']
@@ -86,9 +88,9 @@ with tempfile.TemporaryDirectory(prefix='team-live-',dir='/tmp') as folder:
             report['panes']={pane:rect for pane,rect in rects.items()}
             worker=workers[0].get('name') or workers[0]['pane_id']
             print('STANDBY_READY',worker,flush=True)
-            later=f'现在把任务 T2 委托给待命 worker {worker}：让它计算十九乘二十三，仅输出 TEAM_PROBE_RESULT: 后跟计算结果。你必须通过 Herdr agent prompt 委托并读取该 worker 的实际输出，不能自己代替 worker 计算。拿到结果后，你在主 pane 输出 TEAM_SUMMARY: 后跟结果。其它 worker 继续待命。不要修改文件或再开 worker。'
+            later=f'现在把任务 T2 委托给待命 worker {worker}：让它计算十九乘二十三，仅输出 TEAM_PROBE_RESULT: 后跟计算结果。你必须通过 Herdr agent prompt 委托并读取该 worker 的实际输出，不能自己代替 worker 计算。拿到结果后，你在主 pane 输出 TEAM_SUMMARY: 后跟结果。其它 worker 继续待命。仅可更新本地执行记录，不修改源码或再开 worker。'
             cli('agent','prompt',coordinator,later)
-            deadline=time.monotonic()+150
+            deadline=time.monotonic()+args.timeout
             success=False
             while time.monotonic()<deadline:
                 worker_text=output(worker)

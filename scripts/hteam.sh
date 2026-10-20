@@ -11,6 +11,9 @@
 #   -k, --kind KIND       coordinator agent kind (aliases supported)
 #   -C, --path PATH       working directory (default: current directory)
 #   -p, --prompt TEXT     optional first request to the coordinator
+#       --config FILE    team JSON (default: PATH/.herdr-team.json, if present)
+#       --worker-kind KIND  default worker kind (otherwise coordinator kind)
+#       --max-workers N  live worker limit across the team (default: 4)
 #       --no-focus        keep the user's current workspace focused
 #   -v, -V, --version     print the shared repository version
 #   -h, --help            show this help
@@ -22,11 +25,13 @@
 set -euo pipefail
 TEAM_SCRIPT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 source "$TEAM_SCRIPT_DIR/hopen.sh"
+source "$TEAM_SCRIPT_DIR/hteam-context.sh"
 
 kind="codex" path_arg="$PWD" first_request="" no_focus=0
+config_path="${HTEAM_CONFIG:-}" worker_override="" max_override=""
 while [ $# -gt 0 ]; do
   case "$1" in
-    --kind|-k|--path|-C|--prompt|-p)
+    --kind|-k|--path|-C|--prompt|-p|--config|--worker-kind|--max-workers)
       if [ $# -lt 2 ]; then
         echo "hteam: $1 requires a value" >&2; exit 2
       fi
@@ -34,6 +39,13 @@ while [ $# -gt 0 ]; do
         --kind|-k) kind="$2" ;;
         --path|-C) path_arg="$2" ;;
         --prompt|-p) first_request="$2" ;;
+        --config|--worker-kind|--max-workers)
+          [ -n "$2" ] || { echo "hteam: $1 requires a value" >&2; exit 2; }
+          case "$1" in
+            --config) config_path="$2" ;;
+            --worker-kind) worker_override="$2" ;;
+            --max-workers) max_override="$2" ;;
+          esac ;;
       esac
       shift 2 ;;
     --no-focus) no_focus=1; shift ;;
@@ -52,17 +64,19 @@ target_dir="$(cd -- "$path_arg" 2>/dev/null && pwd -P)" || {
 for dependency in herdr jq; do
   command -v "$dependency" >/dev/null 2>&1 || { echo "hteam: $dependency not found" >&2; exit 1; }
 done
+kind=$(_resolve_kind "$kind")
+_ht_load_policy "$target_dir" "$kind" "$config_path" "$worker_override" "$max_override"
 template="$TEAM_SCRIPT_DIR/coordinator-prompt.md"
 [ -r "$template" ] || { echo "hteam: coordinator prompt missing: $template" >&2; exit 1; }
 
 label="$(_label_for "$target_dir")-team"
 ws_label="$(_uniquify_label "$label" workspace)"
 tab_label="$(_uniquify_label "$label" tab)"
-if ! created=$(herdr workspace create --cwd "$target_dir" --label "$ws_label" --no-focus 2>&1); then
-  printf 'hteam: workspace create failed: %s\n' "$created" >&2; exit 1
+if ! team_created=$(herdr workspace create --cwd "$target_dir" --label "$ws_label" --no-focus 2>&1); then
+  printf 'hteam: workspace create failed: %s\n' "$team_created" >&2; exit 1
 fi
 if ! fields=$(jq -er '[.result.workspace.workspace_id, .result.root_pane.pane_id, .result.tab.tab_id]
-  | select(all(.[]; type == "string" and length > 0)) | @tsv' <<<"$created"); then
+  | select(all(.[]; type == "string" and length > 0)) | @tsv' <<<"$team_created"); then
   echo "hteam: workspace create returned invalid IDs; no agent was started" >&2; exit 1
 fi
 IFS=$'\t' read -r ws_id root_pane tab_id <<<"$fields"
@@ -70,11 +84,7 @@ name="$(_agent_name "$ws_id" coordinator)"
 herdr tab rename "$tab_id" "$tab_label" >/dev/null 2>&1 || true
 herdr pane rename "$root_pane" coordinator >/dev/null 2>&1 || true
 
-context=$(jq -n --arg ws "$ws_id" --arg tab "$tab_id" --arg pane "$root_pane" \
-  --arg name "$name" --arg cwd "$target_dir" --arg core "$TEAM_SCRIPT_DIR/hopen.sh" \
-  --arg status "$TEAM_SCRIPT_DIR/hstatus.sh" \
-  '{workspace_id:$ws, tab_id:$tab, coordinator_pane_id:$pane, coordinator_name:$name,
-    cwd:$cwd, launcher_core:$core, status_entry:$status}')
+context=$(_ht_context "$target_dir" "$ws_id" "$tab_id" "$root_pane" "$name" "$kind")
 prompt="$(cat "$template")"$'\n\n'
 prompt+="## Runtime context (authoritative scope)"$'\n'
 prompt+="$context"$'\n\n'

@@ -29,3 +29,14 @@ An optional interactive agent in the main pane that uses Herdr on the user's beh
 workers, delegate work, inspect evidence and summarize results during the conversation.
 It is not a repository-owned background scheduler or a persistent Workflow runtime.
 _Avoid_: Workflow engine, daemon
+
+**Team**:
+Resources created for a conversational coordinator or explicitly assigned to it by the user.
+Membership can span tabs and worktree workspaces; location or shared repository alone does not
+establish membership.
+_Avoid_: All agents in the workspace, implicit project-wide control
+
+**Execution Record**:
+Local notes linking a team's tasks, resources, deliverables and checked evidence. They support
+reconciliation with live state; they do not schedule work or promise automatic recovery.
+_Avoid_: Task queue, authoritative runtime state

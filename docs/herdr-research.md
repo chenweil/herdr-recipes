@@ -614,3 +614,106 @@ Herdr 0.9.5、pi 主协调者 + 三个 pi worker，120×40 的实际矩形：
 和主 pane 的 `TEAM_SUMMARY: 437`，同 tab、四个 pane、测试服务清理均通过。
 6 项 hteam 契约测试通过（4.060 秒）。本次验证 hteam 注入新模板后的模型执行，
 不等同于所有 kind、已有会话重新加载 skill 或四 worker 布局已验收。
+
+### 固定配方被误当作 worker 协调（2026-10-19，issue #16）
+
+用户原句是“开始111布局,每个pane 开启pi”，通过 hteam 的 Codex 协调者接收。
+实际对话中主 agent 没有调用固定启动器，而是要求选择保留协调者、替换当前 pane 或
+另开布局；同时 `pane current --current` 因工具环境缺少 pane ID 返回 pane_not_found。
+这次失败发生在派发前，不能归因于 pi 启动失败。
+
+固定配方现在先读 `scripts/recipe-request.md`：默认由 hopen-once 新建固定 Recipe，
+当前主对话保留；名称和空提示词使用脚本默认值。只有用户明确指定当前 tab 时才核对
+原地操作冲突。hteam 已知的 coordinator_pane_id 用显式查询核验。
+
+验证分层：
+
+- 捕获的原始回放确实包含布局选择问题；这构成已知失败样本。
+- `-l 111 -k pi:3` 在现有 fake fixture 中产生三个 pi start、两次 split、零次 prompt。
+- 6 项 hteam 契约测试通过（4.057 秒），skill validator、链接、Python 编译与 diff check 通过。
+- `tests/smoke_hteam_recipe.py` 用真实 Codex 重放同一原句，不回答任何后续问题。修改后
+  Codex 直接说明新工作区/三个 pi/保留主对话，并选择正确的 hopen-once 命令。
+- 该次真实测试仍因 Codex 的沙箱授权弹窗阻断，最终未通过“三个 pi 已准备”的断言；
+  测试隔离服务已退出。没有自动确认该弹窗，也没有修改全局权限配置。
+
+因此当前证据支持“路由和多余的布局追问已纠正”，不支持“Codex 完整免审批准备已验收”。
+
+### 固定 Recipe 端到端验收与沙箱隔离破洞（2026-10-20，issue #16）
+
+按上一节记录的证据分层重跑 `tests/smoke_hteam_recipe.py`。第一轮按文档原样执行，
+在默认 Codex 配置下复现了同样的审批阻断：协调者已经不再追问，直接说明“将新建一个
+工作区，111 为横向三个 pane，每个启动 pi；当前协调者保留”，并给出正确的
+`hopen-once.sh -C … -l 111 -k pi:3` 命令，但停在沙箱授权弹窗。
+
+把弹窗当成“测试没配好”处理之前，先查了两件事，结论与直觉相反：
+
+1. **审批只是表象，隔离本身是破的。** 隔离实例的 pane 里，协调者执行的
+   `herdr pane current --pane w1:p1` / `herdr pane list --workspace w1` 返回
+   `pane_not_found` / `workspace w1 not found`。查日志确认这两个请求进的是**用户真实
+   实例**（真实 `herdr-server.log` 23:46:23 记录了 `cli:pane:current`、`cli:pane:list`），
+   隔离实例日志里一条都没有。直接复现：Codex 的 `workspace-write` 沙箱连不上 Herdr 的
+   unix socket（`PermissionDenied: Operation not permitted`），CLI 于是落到了默认 socket。
+   后果是：一旦审批被放行，`hopen-once.sh` 会在用户真实 Herdr 里建 111 工作区加三个 pi，
+   而断言查的是隔离实例——既必然失败，又污染真实环境。
+2. **审批提示本身不是产品缺口。** 固定 Recipe 规则要求把命令权限提示和布局/角色追问
+   分开，真实工具权限交给宿主审批流程；产品不改 agent 的全局权限设置是对的。
+
+因此修的是**测试夹具**，不是产品逻辑：smoke 现在自建临时 `CODEX_HOME`，从用户自己的
+Codex 配置复制（只读复制，不改全局）并覆盖 `approval_policy = "never"` 与
+`sandbox_mode = "danger-full-access"`，同时信任仓库真实路径。沙箱放开是必要的——
+`workspace-write` 下 socket 不可达，命令根本到不了启动器。
+
+修复后默认环境重跑通过（`FIXED_RECIPE_WITHOUT_CLARIFICATION_OK`）：协调者未收到任何
+追问即完成固定 Recipe，新工作区 111 布局三个 pi、协调者工作区与单 pane 保留、几何
+(0,0,.5,1)/(.5,0,.25,1)/(.75,0,.25,1) 符合预期、全部工作区关闭、隔离服务退出。
+真实实例工作区列表与运行前一致，无新增、无残留进程。
+
+附注：本机 Codex 全局配置的信任列表里是 `~/playground/herdr-recipes`，而仓库实际在
+`~/project/herdr-recipes`，两者不是同一路径；隔离配置按仓库真实路径写入信任项。
+
+
+## 10. 团队作用域协调（2026-10-21，ADR-0003，Unreleased）
+
+经用户逐项确认后，协调模型从单 tab 扩展为显式归属的团队：主对话保留为入口，
+按任务组织工作 tab 和独立 worktree，专业技能提供方法，worker 全部通过 Herdr 管理。
+启动器与原地 skill 接管共用 hteam-context.sh，读取可选项目 JSON / 显式配置 / CLI
+覆盖，注入实际主位置、kind、有效启动配置、team_id 与本地记录路径；不解析任务文本。
+本次明确要求由模型理解并覆盖启动配置，脚本仍只 Dispatch 一个主协调者。
+
+四人上限和 kind 策略是提示词义务与实际查询核验，不是执行层隔离。记录是本地笔记，
+不入提交、不代替 GitHub Issues；上下文恢复先查实际现场，没有持久化调度或自动恢复。
+当前 tab 的旧几何约定移入条件引用 coordinator-layouts.md，固定 Recipe 路径保留。
+
+### 本地验证
+
+- python3 -m unittest discover -s tests -p 'test_*.py'：88 项通过。之后启动器变量重命名
+  消除与被 source 的布局数组同名的 ShellCheck 警告，11 项 hteam focused 再通过。
+- 配置测试覆盖继承 kind、null、省略默认值、alias、项目/显式文件/CLI 优先级、原始任务
+  不被解析、非法 JSON/字段/数值在任何 Herdr 操作前失败、同一解析器的原地入口无副作用。
+  非法输入是负向对照，不把模型遵守策略误称为 fixture 已验证。
+- shellcheck -x -P scripts scripts/hteam.sh scripts/hteam-context.sh、Bash 语法、Python 编译
+  与 git diff --check 通过。
+
+### 真实模型验证
+
+Herdr 0.9.5、pi 主协调者与 pi worker，临时项目及独立 server。新 smoke 将 CLI 固定到
+测试 socket，worktree 默认路径也限定在临时目录；保留 agent 原生配置，不复制或修改
+全局模型、账号、权限设置。执行宿主沙箱最初阻止创建 server（PermissionDenied），
+测试通过所需工具权限重跑，产品不会通过调整全局 agent 权限绕过阻塞。
+
+| 场景 | 结果与实际检查 |
+|---|---|
+| tabs | 通过：配置上限 2，本次明确要求 3，实际三个同 kind worker；独立工作 tab 待命，随后复用相同 pane 写三份证据笔记并综合 report.md，配置未修改。 |
+| worktrees | 通过：两个 pi worker、四个 checkout（主目录、两个实现、一个整合）；独立本地提交及整合版本包含两份预期文件；主目录 HEAD 与预置未提交文件原样保留，本地记录未入整合提交。 |
+| failure | 通过：指定一个 pi 和一个不存在的 kind，实际只启动一个 worker；可用 worker 独立交付笔记，最终报告准确说明 1/2、原始失败诊断与未完成影响，没有静默替换。 |
+| 当前 tab 三 worker | 通过：主 pane 左侧 60×40；右侧分别为 60×20、30×20、30×20；待命后真实委托计算，worker 与协调者输出均为 437，workspace 与隔离服务已清理。 |
+
+前三场景均检查了主 pane、同 workspace 未交付 tab、其它 workspace 与用户焦点保留，
+本地团队/任务记录存在，测试 server 已退出。测试仓库及产物为临时夹具，不是项目实际
+交付或生产验收。其它 agent kind、宿主自动发现 skill、真实用户已有会话的原地接管、
+资源回收和丢失上下文后的人工接续尚无本轮完整模型行为验证。
+
+失败场景的第一轮曾因测试只搜索根目录笔记而误报：实际 worker 写到了 notes/ 下，
+协调者已核对该笔记并正确交付部分报告。测试改为在执行记录之外的项目 Markdown
+交付中检查来源证据，避免用协调者记录冒充独立 worker 产物；重跑通过。未放宽实际
+人数、类型、缺口说明或来源证据断言。

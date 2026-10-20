@@ -11,6 +11,12 @@
 
 ### 新增
 
+- **跨 tab/worktree 的对话式团队**（ADR-0003）：共用协调模板管理显式归属的资源，
+  根据任务选择分工，全团队默认四个 worker、kind 沿用主协调者；本次明确要求可覆盖。
+  `hteam-context.sh` 为启动器与原地协调共用配置和上下文，支持项目 JSON、显式配置和
+  CLI 默认值覆盖。通过 Herdr 派工、记录本地证据、整合验证与受控复用；约束属于模型
+  行为与现场核验，不是执行层硬限制，也不增加后台调度或恢复服务。
+
 - **`herdr-recipes` 项目 skill**（#16）：自然语言选择固定 Recipe、新 hteam 团队、当前
   tab 协调和只读状态；复用全局 herdr skill 的 CLI 知识与现有协调模板。提供项目发现
   链接和用法，原地协调保留其它已有 pane/agent；模型端发现与完整执行需实测。
@@ -27,6 +33,17 @@
   `tests/smoke_hstatus.py` 在隔离 server 验证 caller、显式查询、多 tab 及状态不变。
 
 ### 修复
+
+- 固定 Recipe 请求优先走启动器：如“111 布局，每个 pane 开 pi”，直接新建三个 pi 的
+  工作区并保留当前协调者，省去角色/命名/是否保留主对话的追问。启动器上下文通过精确
+  pane ID 核验，避免 Codex 工具环境未继承 pane ID 时被 `--current` 失败阻断。
+  真实模型重放已通过：协调者未收到追问即完成 111 布局 + 三个 pi，协调者工作区保留，
+  几何与清理均核验通过。
+
+- `tests/smoke_hteam_recipe.py` 自建临时 `CODEX_HOME`（复制用户 Codex 配置，不改全局）：
+  Codex 默认 `workspace-write` 沙箱连不上 Herdr 的 unix socket，pane 内的启动器命令会被
+  拒绝，且 CLI 会落到用户真实 Herdr 实例——审批一旦放行就会污染真实环境、断言也必然
+  失败。隔离配置覆盖 `approval_policy = "never"` 与 `sandbox_mode = "danger-full-access"`，验收命令现在可在默认环境直接跑通。
 
 - 协调模板明确三个 worker 的分裂顺序（主 pane 向右、右 pane 向下、新下 pane 向右），
   避免形成三层堆叠；汇报布局前必须读取实际 pane 矩形。真实模型 smoke 新增

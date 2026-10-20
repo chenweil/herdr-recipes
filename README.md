@@ -10,6 +10,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `scripts/hopen-agents.conf` | Per-layout / per-pane agent dispatch (which pane gets `claude` / `codex` / `pi` / …) plus optional `pane_name` |
 | `scripts/hteam.sh` | Start one conversational coordinator that prepares workers and delegates through Herdr |
 | `scripts/coordinator-prompt.md` | Inspectable instructions for worker preparation, later delegation and evidence-based summaries |
+| `scripts/hteam-context.sh` | Shared team policy and runtime context builder for the launcher and in-place coordination |
 | `skills/herdr-recipes/SKILL.md` | Natural-language entry to Recipes and conversational coordination, alongside the global herdr skill |
 | `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
@@ -46,30 +47,51 @@ bash scripts/hteam.sh                         # default coordinator: codex
 bash scripts/hteam.sh -k pi                    # use pi as the coordinator
 bash scripts/hteam.sh -p "先准备两个 codex 和一个 pi，暂时不要工作"
 bash scripts/hteam.sh -C /path/to/project -p "拆分登录功能，安排实现、测试和审查"
+bash scripts/hteam.sh --worker-kind pi --max-workers 3 -p "调研这个问题，汇总成一份文档"
 ```
 
-Talk to the main pane afterward: “把登录实现交给第一个 worker，第二个补测试”，
-then “汇总进度和验证结果”. The coordinator can prepare idle workers first and delegate
-later, choosing how many panes to open or reuse in the same tab. The main pane keeps
-the left half when workers are added; workers share the right half.
-Three workers use one top pane and two side-by-side bottom panes; four use a 2×2 grid.
-The coordinator must inspect actual pane rectangles before reporting or drawing the layout.
+Talk to the main pane afterward. The coordinator chooses useful parallel work, defaults to
+the same worker kind as itself and a team-wide limit of four live workers (including standby),
+and manages only resources it created or you explicitly assigned. It keeps your main tab as
+the entry point, groups related workers in work tabs, and uses independent worktrees for
+parallel code changes. Explicit current-tab requests retain the left-main/right-workers layout.
+Actual IDs, kind/count and per-tab geometry must be checked before reporting success.
+
+Optional `.herdr-team.json` in the target project configures `worker_kind` (null means inherit)
+and `max_workers`; see [the example](config/hteam.example.json). `--config FILE` / `HTEAM_CONFIG`
+select another file; CLI options override its values. Your explicit current request overrides
+the launch policy without editing it: “这次六个 pi” temporarily raises the budget to six.
+The model cannot raise its own budget. These are prompt obligations with live checks, not
+hard execution limits. Native model/account/permission settings are left to each agent.
 
 The launcher bootstraps one coordinator only. Worker management is performed by the
 interactive agent under [the coordinator instructions](scripts/coordinator-prompt.md),
-with exact workspace/tab context. No background queue, automatic retries or task recovery
-is added. Startup success is Recipe Ready, not completion of the delegated work.
-See [ADR-0002](docs/adr/0002-conversational-coordinator.md). The pi-coordinator/pi-worker
-standby → later delegation → result summary flow was verified on Herdr 0.9.5;
-other agent kinds remain subject to their tool and approval configuration.
+with exact context and the same policy builder used in-place. All worker delegation uses
+Herdr; domain skills still supply research/review methods. A complete task is pursued through
+inspection, correction and checked delivery in the current execution. Standby requests only
+prepare resources. Local notes under `.herdr-recipes/teams/<team_id>/` track ownership and
+evidence, excluded from commits; they are not a queue or automatic recovery service.
+Local integration commits and combined verification are allowed for implementation tasks;
+push/publish still require task authorization. Workers normally remain on standby and may be
+reused or, when capacity is needed, reclaimed only after team ownership and archived results
+are verified. Worktrees/branches are retained until explicitly removed.
+
+Startup success is Recipe Ready, not completion of delegated work. See
+[ADR-0003](docs/adr/0003-team-scoped-conversational-coordination.md) and
+[the script reference](scripts/README.md#hteamsh--对话式协调入口). Historical pi/pi same-tab
+smoke evidence does not establish the new multi-tab or worktree behavior; those have a separate
+opt-in [live smoke](tests/smoke_hteam_workspace.py). The multi-tab, worktree integration and
+partial-failure scenarios passed with Herdr 0.9.5 and pi, alongside the explicit current-tab
+three-worker geometry regression; see [the dated evidence](docs/herdr-research.md#10-团队作用域协调2026-10-21adr-0003unreleased).
 
 ## Project skill (`herdr-recipes`)
 
 The [project skill](skills/herdr-recipes/SKILL.md) complements the global `herdr` skill:
 it chooses the Recipe/team/status entry point and shares the coordinator instructions.
 Inside Herdr, the current agent can become the coordinator; an explicit new-team request
-uses `hteam.sh`. The `-k` on that launcher selects the main agent, while the request determines
-worker kinds and count. General Herdr CLI knowledge stays in the global skill.
+uses `hteam.sh`. Both paths use `hteam-context.sh` to load launch policy and the same coordinator
+template. `-k` selects the main agent; worker policy or your request controls worker kinds/count.
+General Herdr CLI knowledge stays in the global skill.
 
 Enable project discovery with a local link from the repository root (leave any existing
 `herdr-recipes` entry intact and inspect it first):
@@ -86,16 +108,35 @@ continues to install scripts/key bindings; it does not install this skill global
 
 Example requests after loading `$herdr-recipes`:
 
+- “开始111布局，每个 pane 开启 pi。” → fixed Recipe: a new workspace with three pi
+  panes, preserving the current coordinator. Defaults cover names and empty prompts, so
+  this request needs no follow-up questions. Explicit requests to use the current tab take precedence.
 - “在当前 tab 先准备两个 codex 和一个 pi，全部待命。”
 - “分析这个需求，由你决定需要几个 worker，最多三个，先只读分析。”
 - “新建一个 pi 主协调团队，先准备两个 codex，暂时不要工作。”
 - “让实现员处理 T1，复核员等实现后审查，读取实际结果后汇总。”
 
-For manual acceptance, run the first request in a Herdr agent: verify that the caller's
-workspace/tab and existing panes are preserved, three workers receive standby roles, and
-no implementation work starts. Then delegate a small read-only task and check worker output
-before accepting the coordinator's summary. These skill-driven paths still need live model
-validation; the earlier hteam pi/pi smoke covers the launcher path, not skill discovery.
+For manual acceptance of in-place skill discovery, use the second request: verify that the
+caller and unrelated panes are preserved, three workers receive standby roles and no code
+work starts. Then delegate a small task and check actual worker output before accepting the
+summary. Live launcher smoke does not establish host-specific skill discovery.
+
+The fixed-Recipe coordinator regression is opt-in:
+
+```bash
+python3 tests/smoke_hteam_recipe.py --live-agents --binary /path/to/herdr --output /tmp/recipe.json
+```
+
+It replays “开始111布局,每个pane 开启pi” through a real Codex coordinator without answering
+questions. The smoke builds a throwaway `CODEX_HOME` from your own Codex configuration
+(copied, never modified) with a non-interactive approval policy and an unrestricted sandbox:
+Codex's default `workspace-write` sandbox cannot reach Herdr's unix socket, so the launcher
+command running inside the pane would be denied before the Recipe exists.
+
+The verified run prepares the 111 layout with three pi in a new workspace, keeps the
+coordinator's workspace and its single pane, matches the 111 geometry (50% / 25% / 25%),
+and closes every workspace afterwards. Codex must be installed and authenticated, since the
+smoke starts a real coordinator.
 
 ## Workspace status (`hstatus.sh`)
 

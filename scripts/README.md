@@ -44,50 +44,91 @@ session socket。布局响应、focus 响应、socket 错误和越界索引都�
 ## hteam.sh — 对话式协调入口
 
 ```bash
-hteam.sh                          # 新 workspace/tab 中只启动一个 codex 协调者
-hteam.sh -k pi                     # 换协调者 kind，支持现有 alias
-hteam.sh -p "先准备两个 codex 和一个 pi，暂时不要工作"
-hteam.sh -C /path/to/project -p "拆分登录功能，安排实现与审查"
-hteam.sh --no-focus                # 准备后不切换用户当前焦点
+hteam.sh                          # 只启动一个 codex 主协调者，等待任务
+hteam.sh -k pi                     # 主协调者和默认 worker 使用 pi
+hteam.sh --worker-kind pi --max-workers 3 -p "调研这个问题，汇总文档"
+hteam.sh -C /path/to/project -p "完成需求，安排并行实现与联合验证"
+hteam.sh --config /path/to/team.json --no-focus
 ```
 
-启动后只和主 pane 对话，例如：
+`-k` 选择主协调者。启动器仍只创建一个 workspace/tab/root pane，并启动一个主 agent；
+worker 的具体任务和资源由模型决定。完整任务持续推进到交付或真实阻塞；“先准备、
+待命”只准备角色。research/review 等专业技能负责方法，所有 worker 委托通过 Herdr。
+固定 Recipe 继续走原有入口。
 
-1. “先开两个 codex，分别做实现和测试，先待命。”
-2. “实现 worker 处理登录接口；测试 worker 先阅读需求，等实现后补测试。”
-3. “再准备一个 pi 做审查。”
-4. “汇总各任务的改动、实际验证和阻塞项。”
+### 配置与原地协调
 
-用户无需手工组织 `-k/-p` 或记 pane ID。协调者根据对话决定 worker 数量、复用和
-任务提示词；既可立即委托，也可先启动 agent 待命，稍后再分配任务。已有 hopen /
-固定布局入口继续可用。
+目标目录的 `.herdr-team.json` 是可选配置，格式见 [示例](../config/hteam.example.json)：
 
-启动器只创建一个 workspace、一个 tab 和一个协调 pane，通过共用 `_start_agent`
-注入 `coordinator-prompt.md`、精确 workspace/tab/pane ID、cwd 和工具路径。默认
-没有工作任务，协调者应等待用户，不自行创建 worker。新增 worker 由协调者使用
-Herdr CLI 在同 tab 的右半区完成；主 pane 保留左半区，三个 worker 是上一个、下两个，
-四个 worker 是上二下二。具体分裂顺序维护在协调模板中；汇报布局前读取实际 pane rect 核验。
-这类布局和派工是模型遵循模板的行为，不是 shell 中的确定性调度规则或权限隔离。
+```json
+{"worker_kind": null, "max_workers": 4}
+```
 
-模板可直接阅读和修改。它要求每次委托携带任务 ID、目标、文件范围、交付与验证
-要求；共享 working tree 中协调不重叠的写入范围。协调者通过 `agent read/get` 和
-实际交付查看结果，不以 idle/done 或 `prompt --wait` 代替某项任务验收。`hstatus`
-是只读状态来源；精确 tab 范围还需从 pane list 的 tab_id 核对。
+`worker_kind: null` 或省略表示沿用主协调者 kind；`max_workers` 省略为 4。
+只接受这两个字段，max_workers 必须为正整数；无效 JSON、拼错字段或显式缺失文件在
+创建资源前报错。`--config FILE` 优先于 `HTEAM_CONFIG`，两者都未给才查目标目录文件；
+`--worker-kind/--max-workers` 覆盖文件中的值。kind alias 与 hopen 共用，支持情况最终
+由 Herdr 判定；没有预先执行各 agent 的模型、账号或权限配置。
 
-启动输出为一行 `ws=... panes=... coordinator=...`，仅包含刚启动的主 pane。
-正常发一次 Recipe Ready；agent 启动或角色提示词提交失败时发 request 通知、
-exit 1，保留 workspace 供检查，并在 stderr 标出 ID；创建前的参数错误 exit 2。
-`--help` 与 `-v/-V/--version` 不创建资源。安装软链会直接包含新入口，无需改用户配置。
+用户本次明确要求优先于启动配置，启动配置优先于默认值。“这次六个 pi”由模型理解
+并临时调整约束，脚本不会解析任务文本或改写配置。上限跨本团队所有 tab/worktree
+合计，启动中、工作中、待命均计入，主协调者和普通进程不计入。这是模型行为约定与
+现场核验，不是强制资源隔离。数量不足或类型失败须报告，不能静默替换后宣称成功。
 
-真实 pi 协调者 / pi worker 已在 Herdr 0.9.5 验证“先待命 → 后委托 → 读取并汇总”。
-完整链路可用 `tests/smoke_hteam.py --live-agents` 显式复验，会调用真实模型；
-加 `--workers 3` 会在后续委托前断言三个 worker 的实际“上一个、下两个”几何，
-主 pane 仍须占左半区。该断言已在修复前真实模型产生的三层堆叠布局上报错。
-修复后 pi 主协调者 + 三个 pi worker 的几何、待命、后续委托与汇总均通过。
-其它 kind 和四 worker 布局尚未完成模型行为实测，详见 research §9。
+当前对话接管时，先通过实际 Herdr 查询取得位置与 kind，然后使用同一 context 入口：
 
-本入口不引入后台 worker 服务、持久化任务队列、自动重试或断线恢复；交互模型是否
-能使用终端工具和是否需要批准，仍取决于该 agent 的实际配置。决策见 ADR-0002。
+```bash
+bash scripts/hteam-context.sh -C /path/to/project \
+  --workspace <实际ID> --tab <实际ID> --pane <实际ID> --kind <实际kind>
+```
+
+有 live name 才传 `--name`。该入口只输出 JSON，不调用 Herdr、不创建文件或资源。
+随后当前 agent 读取 coordinator-prompt.md 并沿用该 context；后续对话不重复生成团队。
+新建团队和原地接管共用配置解析、默认值、team_id、record_dir 和工具路径。
+
+### 团队、证据与生命周期
+
+管理范围是本团队创建或用户明确交付的资源。主 tab 保留为用户入口，默认在工作 tab
+组织 worker；独立并行代码修改使用有明确 Git 基线的 worktree，对应 Herdr 关联
+workspace。已有未提交改动是否影响基线必须明确。用户指定当前 tab 时才读取
+[当前 tab 布局](coordinator-layouts.md)，不强制重排已有现场。逐 tab 查询真实矩形，
+用显式 ID 与 `--no-focus` 操作，保持用户焦点。
+
+context 的初始 workspace/tab/pane 用于身份核验，coordinator_kind 用于默认 kind；
+team_config 是启动策略，config_path 记录来源。team_id 区分不同调用；record_dir 为
+目标项目 `.herdr-recipes/teams/<team_id>/` 的绝对路径。启动器只计算路径，由主协调者
+在有准备/工作任务时按 [记录约定](coordinator-records.md) 建立资源表和每轮任务证据。
+该目录排除在提交之外，不能当成 GitHub Issues、权威运行状态或自动恢复队列。
+
+每次委托含任务 ID、目标、checkout/基线、写入范围、交付与验证要求。主协调者核对
+worker 实际文件、来源和检查结果，idle/done 或 `prompt --wait` 不是任务验收。
+多 worktree 由主协调者整合并联合验证，可在完整实现任务中进行必要的本地提交/合并，
+保护无关改动；推送、发布依当前任务授权。交付后默认待命，名额不足时可回收已完成、
+已存档且允许回收的本团队临时 worker pane，不自动删除 worktree/分支。
+
+启动输出仍为 `ws=... panes=... coordinator=...`，只包含主 pane，兼容现有调用。
+正常发一次 Recipe Ready；启动或角色提示词提交失败时发 request 通知、exit 1、保留
+workspace。创建前参数错误 exit 2；`--help` 和版本查询不创建资源。未引入 daemon、
+后台重试或对话结束后自动接续。决策见 [ADR-0003](../docs/adr/0003-team-scoped-conversational-coordination.md)。
+
+### 验证边界
+
+fixture 测试检查共享配置/上下文、原始任务注入、只启动一个协调者、失败与兼容输出。
+它不能证明模型会遵守团队策略。真实模型验收使用隔离 server 与临时项目，保留原生
+agent 配置，需要可用的登录和模型环境；不会改写全局配置以绕过权限。
+跨 tab/worktree 能力按安装版本的 `--help` 检查；当前 live 场景针对 Herdr 0.9.5，
+不据此扩大已有固定 Recipe 的版本兼容声明。
+
+```bash
+python3 tests/smoke_hteam_workspace.py --live-agents --binary /path/to/herdr --scenario tabs --output /tmp/tabs.json
+python3 tests/smoke_hteam_workspace.py --live-agents --binary /path/to/herdr --scenario worktrees --output /tmp/worktrees.json
+python3 tests/smoke_hteam_workspace.py --live-agents --binary /path/to/herdr --scenario failure --output /tmp/failure.json
+```
+
+分别检查三 worker 待命后复用/文档汇总与本次预算覆盖、两个独立修改及整合版本、
+指定 kind 不可用时的独立工作与部分交付。各场景同时核对主 pane、未交付资源、焦点和
+本地记录。默认 pi；其它 kind 需单独实测，脚本入口通过不代表宿主 skill 发现通过。
+`tests/smoke_hteam.py --workers 3 --live-agents ...` 保留用户明确要求当前 tab 的几何验收。
 
 ## hstatus.sh — 只读 workspace 状态摘要
 

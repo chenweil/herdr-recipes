@@ -10,3 +10,4 @@ __pycache__/
 
 # 本地 agent 工作区状态（agent memory 等），机器相关，不进版本库。
 .workbuddy/
+.herdr-recipes/
