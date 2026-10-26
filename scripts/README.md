@@ -102,9 +102,13 @@ team_config 是启动策略，config_path 记录来源。team_id 区分不同调
 
 每次委托含任务 ID、目标、checkout/基线、写入范围、交付与验证要求。主协调者核对
 worker 实际文件、来源和检查结果，idle/done 或 `prompt --wait` 不是任务验收。
+开发、review 等 worker 的模型/API 异常与停滞由协调者按
+[监督与恢复规则](coordinator-prompt.md#5-监督纠正与验证) 主动检查、恢复并核验进展；
+恢复失败达到上限后明确报告阻塞。
 多 worktree 由主协调者整合并联合验证，可在完整实现任务中进行必要的本地提交/合并，
-保护无关改动；推送、发布依当前任务授权。交付后默认待命，名额不足时可回收已完成、
-已存档且允许回收的本团队临时 worker pane，不自动删除 worktree/分支。
+保护无关改动；推送、发布依当前任务授权。issue 完成后的主动回收与下一项开始前的
+收尾核对，按 [协调规则第 6 节](coordinator-prompt.md#6-整合交付与收尾) 执行；同一任务
+后续派工或用户明确要求待命时保留所需 worker，不自动删除 worktree/分支。
 
 启动输出仍为 `ws=... panes=... coordinator=...`，只包含主 pane，兼容现有调用。
 正常发一次 Recipe Ready；启动或角色提示词提交失败时发 request 通知、exit 1、保留

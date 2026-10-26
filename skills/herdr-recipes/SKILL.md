@@ -1,6 +1,6 @@
 ---
 name: herdr-recipes
-description: "用户要求用 Herdr 准备固定布局、新建团队、当前对话协调跨 tab/worktree 的 agent 工作、先待命后委托或汇总结果时使用；只读状态走 hstatus，通用 CLI 知识交给全局 herdr skill。"
+description: "用户要求用 Herdr 准备固定布局、新建团队、当前对话协调跨 tab/worktree 的 agent 工作、先待命后委托、汇总结果或 issue 完成收尾与切换时使用；只读状态走 hstatus，通用 CLI 知识交给全局 herdr skill。"
 ---
 
 # Herdr Recipes
@@ -20,7 +20,7 @@ description: "用户要求用 Herdr 准备固定布局、新建团队、当前�
 |---|---|
 | 指定布局/kind/初始提示词，或已有 conf 配方 | 使用 `scripts/hopen-once.sh`；已有 conf 配方使用 `scripts/hopen.sh`。逐项报告布局、启动和初始提示词提交结果。 |
 | 新建一个可持续对话的团队 | 使用 `scripts/hteam.sh`，将初始要求原样放入 `-p`，目标目录传入 `-C`；`-k` 只选主协调者。成功后交付返回的工作区/主 pane，由新主 agent 接续；worker 准备结果需后续核对。 |
-| 当前 agent 准备 worker、处理完整任务、后续派工或汇总 | 进入下方“当前对话协调”，保留当前主对话；未给布局的“三个 agent 调研并汇总”也属于此路径。 |
+| 当前 agent 准备 worker、处理完整任务、后续派工、汇总或 issue 收尾与切换 | 进入下方“当前对话协调”，保留当前主对话；未给布局的“三个 agent 调研并汇总”也属于此路径。 |
 | 仅查看 pane/agent 状态 | 使用 `scripts/hstatus.sh`，当前调用方或用户指定的 workspace，按需 `--json`。状态只说明现场，不证明任务完成。 |
 
 只解释用法时给出命令或提示示例。为准备团队而调用脚本时，使用完整参数执行已安装入口，
@@ -47,7 +47,11 @@ description: "用户要求用 Herdr 准备固定布局、新建团队、当前�
    agent 委托全部经 Herdr，不使用宿主 sub-agent 替代。汇报布局前逐 tab 核对真实矩形。
 
 全局 herdr skill 提供 CLI 操作知识；协调规则提供团队归属、资源策略、任务和证据约定。
-协调规则（coordinator-prompt.md）列有两个必守约束：① 管理/调度角色（协调者与
+协调规则（coordinator-prompt.md）列有四个必守约束：① 管理/调度角色（协调者与
 review 角色）不在主对话现场直接运行测试，改在独立 tab/pane 中执行并回现场核对；
 ② 每个 issue 的开发独占一个以 issue 标识命名的新 tab，不在既有 issue 的 tab 上做新 issue。
-两者按当前分支读取，共用协调规则已在上下文时直接复用。
+③ issue 完成后按协调规则第 6 节主动回收该 issue 的临时 tab/pane 和 worker，开始下一项
+前补查收尾；核验与存档后直接执行，无需等用户提醒或再次确认，保留项须说明原因。
+④ 所有受委派角色（含开发与 review）由协调者持续监督；模型/API 报错或停滞时按第 5 节
+主动恢复原会话，必要时重建同角色 worker，并核验新进展；达到恢复上限则报告阻塞。
+四者按当前分支读取，共用协调规则已在上下文时直接复用。
