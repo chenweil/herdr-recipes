@@ -47,4 +47,7 @@ description: "用户要求用 Herdr 准备固定布局、新建团队、当前�
    agent 委托全部经 Herdr，不使用宿主 sub-agent 替代。汇报布局前逐 tab 核对真实矩形。
 
 全局 herdr skill 提供 CLI 操作知识；协调规则提供团队归属、资源策略、任务和证据约定。
+协调规则（coordinator-prompt.md）列有两个必守约束：① 管理/调度角色（协调者与
+review 角色）不在主对话现场直接运行测试，改在独立 tab/pane 中执行并回现场核对；
+② 每个 issue 的开发独占一个以 issue 标识命名的新 tab，不在既有 issue 的 tab 上做新 issue。
 两者按当前分支读取，共用协调规则已在上下文时直接复用。

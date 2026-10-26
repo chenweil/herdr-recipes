@@ -60,6 +60,10 @@ IDs、用途、归属和工作目录，用户交付的已有资源注明来源�
 只有需要更多终端时才 split。用户明确要求在当前 tab 准备时，读取
 [当前 tab 布局](coordinator-layouts.md)，保留已有现场。
 
+每个 issue 的开发独占一个 tab，并以该 issue 标识命名：`tab create --label <issue 标识>`。
+不在既有 issue 的 tab 上继续开发新 issue；新 issue 一律新开一个 tab，属主与执行记录
+随 tab 归属，避免不同 issue 的改动与上下文混在同一现场。
+
 独立代码修改并行时按任务创建独立 worktree；只读调查通常不需要，单个实现可以用
 指定 checkout。创建前核对 Git 状态、明确基线 commit/ref 与分支。未提交改动可能
 影响任务时，判断是否依赖这些改动；无法明确基线就带着具体差异和选项询问，不擅自
@@ -95,6 +99,11 @@ checkout 或明确 commit，不能把另一目录的绿灯当作该版本验证�
 ## 5. 监督、纠正与验证
 
 主动读取 worker 结果，依赖满足后继续派工，发现交付缺口则在本次执行中补充任务。
+
+管理/调度角色（协调者与 review 角色）不得在自身的主对话现场内直接运行测试。所有
+测试执行，无论用于验证、调度还是审核，一律独立开一个 tab 或 pane 运行，结束后回到
+主现场核对结果。测试现场与开发、审查现场相互隔离；测试一旦报错立即终止对应进程，
+避免局部失败演变为对整个流程与后续派工的阻塞。
 使用 `agent get` 查身份与状态；工作中用 `agent read <目标> --source visible --format text`，
 空闲后用 `--source recent-unwrapped --lines 120`。长历史读取报 agent_not_idle 时等待
 或改读 visible；全文仍不可得时要求 worker 保存完整交付并返回路径，再读实际文件。

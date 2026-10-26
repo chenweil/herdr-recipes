@@ -29,10 +29,10 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 Every script accepts `-v`, `-V`, or `--version`:
 
 ```bash
-./install.sh --version                  # herdr-recipes 0.8.0
-scripts/hopen.sh -v                     # hopen 0.8.0
-scripts/hopen-once.sh -v                # hopen-once 0.8.0
-scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.8.0
+./install.sh --version                  # herdr-recipes 0.9.0
+scripts/hopen.sh -v                     # hopen 0.9.0
+scripts/hopen-once.sh -v                # hopen-once 0.9.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.9.0
 ```
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
