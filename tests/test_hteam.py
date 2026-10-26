@@ -1,6 +1,8 @@
 import json
+import os
 from pathlib import Path
 import re
+import subprocess
 import unittest
 
 from test_hopen_dispatch import FakeHerdrLauncherFixture, REPO_ROOT
@@ -42,7 +44,7 @@ class TeamLauncherTests(FakeHerdrLauncherFixture, unittest.TestCase):
             "launcher_core": str(REPO_ROOT / "scripts" / "hopen.sh"),
             "status_entry": str(REPO_ROOT / "scripts" / "hstatus.sh"),
             "context_entry": str(CONTEXT), "coordinator_kind": "codex",
-            "team_config": {"worker_kind": "codex", "max_workers": 4}, "config_path": None,
+            "team_config": {"worker_kind": "codex", "max_workers": 4, "skills": {}}, "config_path": None,
         }
         self.assertEqual({key: context[key] for key in expected}, expected)
         self.assertRegex(context["team_id"], r"^team-[0-9T]+-[0-9]+-[0-9]+$")
@@ -88,11 +90,11 @@ class TeamLauncherTests(FakeHerdrLauncherFixture, unittest.TestCase):
         explicit = project / "custom.json"
         explicit.write_text(json.dumps({"worker_kind": "cc", "max_workers": 3}))
         cases = [
-            ([], {}, {"worker_kind": "pi", "max_workers": 2}, project_config),
-            (["--config", str(explicit)], {}, {"worker_kind": "claude", "max_workers": 3}, explicit),
-            ([], {"HTEAM_CONFIG": str(explicit)}, {"worker_kind": "claude", "max_workers": 3}, explicit),
+            ([], {}, {"worker_kind": "pi", "max_workers": 2, "skills": {}}, project_config),
+            (["--config", str(explicit)], {}, {"worker_kind": "claude", "max_workers": 3, "skills": {}}, explicit),
+            ([], {"HTEAM_CONFIG": str(explicit)}, {"worker_kind": "claude", "max_workers": 3, "skills": {}}, explicit),
             (["--config", str(explicit), "--worker-kind", "op", "--max-workers", "6"], {},
-             {"worker_kind": "opencode", "max_workers": 6}, explicit),
+             {"worker_kind": "opencode", "max_workers": 6, "skills": {}}, explicit),
         ]
         for options, environment, expected, config in cases:
             with self.subTest(options=options, environment=environment):
@@ -113,6 +115,89 @@ class TeamLauncherTests(FakeHerdrLauncherFixture, unittest.TestCase):
         self.assertEqual(context["team_config"]["max_workers"], 2)
         self.assertEqual(actual_request, request)
         self.assertEqual(len(self.calls_for(self.read_calls(), "agent", "start")), 1)
+
+    def test_skill_conventions_pass_through_and_reject_unknown_roles(self):
+        project = Path(self.temp_dir.name) / "skills project"
+        project.mkdir()
+        config = project / ".herdr-team.json"
+        skills = {"implement": "implement", "review": "code-review",
+                  "diagnose": "diagnosing-bugs", "route": "ask-matt"}
+        config.write_text(json.dumps({"skills": skills}))
+        result = self.run_launcher(TEAM, "-C", str(project))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        context, _ = self.launched_context()
+        self.assertEqual(context["team_config"]["skills"], skills)
+        self.assertEqual(json.loads(config.read_text()), {"skills": skills})
+
+        for body in ('{"skills":[]}', '{"skills":"implement"}',
+                     '{"skills":{"review":""}}', '{"skills":{"review":"Bad Name"}}',
+                     '{"skills":{"verify":"code-review"}}', '{"skills":{"review":null}}'):
+            with self.subTest(body=body):
+                config.write_text(body)
+                self.clear_calls()
+                result = self.run_launcher(TEAM, "--config", str(config))
+                self.assertEqual(result.returncode, 2, result.stderr)
+                self.assertEqual(self.read_calls(), [])
+
+    def test_project_config_is_found_by_walking_up_to_the_repo_root(self):
+        project = Path(self.temp_dir.name) / "walk project"
+        nested = project / "pkg" / "src"
+        nested.mkdir(parents=True)
+        (project / ".git").mkdir()
+        project_config = project / ".herdr-team.json"
+        project_config.write_text(json.dumps({"max_workers": 2,
+                                              "skills": {"review": "code-review"}}))
+        for target in (project, project / "pkg", nested):
+            with self.subTest(target=target.name):
+                self.clear_calls()
+                result = self.run_launcher(TEAM, "-C", str(target))
+                self.assertEqual(result.returncode, 0, result.stderr)
+                context, _ = self.launched_context()
+                self.assertEqual(context["team_config"]["max_workers"], 2)
+                self.assertEqual(context["team_config"]["skills"], {"review": "code-review"})
+                self.assertEqual(context["config_path"], str(project_config.resolve()))
+
+    def test_linked_worktree_inherits_the_main_worktrees_project_config(self):
+        project = Path(self.temp_dir.name) / "main project"
+        project.mkdir()
+        (project / "README.md").write_text("base\n")
+        project_config = project / ".herdr-team.json"
+        git_env = {"GIT_AUTHOR_NAME": "t", "GIT_AUTHOR_EMAIL": "t@example.com",
+                   "GIT_COMMITTER_NAME": "t", "GIT_COMMITTER_EMAIL": "t@example.com"}
+        for command in (["init", "-q"], ["add", "README.md"], ["commit", "-qm", "base"]):
+            run = subprocess.run(["git", "-C", str(project), *command], capture_output=True,
+                                 text=True, env={**os.environ, **git_env})
+            self.assertEqual(run.returncode, 0, run.stderr)
+        worktree = Path(self.temp_dir.name) / "linked worktree"
+        run = subprocess.run(["git", "-C", str(project), "worktree", "add", "-q", str(worktree), "-b", "wt"],
+                             capture_output=True, text=True, env={**os.environ, **git_env})
+        self.assertEqual(run.returncode, 0, run.stderr)
+        # Config lives only in the main checkout as a local, uncommitted file.
+        project_config.write_text(json.dumps({"skills": {"implement": "implement"}}))
+        self.assertFalse((worktree / ".herdr-team.json").exists())
+        self.assertTrue((worktree / ".git").is_file(), "linked worktree root carries a .git file")
+        self.clear_calls()
+        result = self.run_launcher(TEAM, "-C", str(worktree))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        context, _ = self.launched_context()
+        self.assertEqual(context["team_config"]["skills"], {"implement": "implement"})
+        self.assertEqual(context["config_path"], str(project_config.resolve()))
+
+    def test_config_lookup_stops_at_a_repo_root_without_config(self):
+        outer = Path(self.temp_dir.name) / "outer"
+        inner = outer / "inner"
+        inner.mkdir(parents=True)
+        (inner / ".git").mkdir()
+        (outer / ".herdr-team.json").write_text(json.dumps({"max_workers": 3}))
+        # A chosen target directory never inherits config from outside its repo root.
+        nested = inner / "pkg"
+        nested.mkdir()
+        self.clear_calls()
+        result = self.run_launcher(TEAM, "-C", str(nested))
+        self.assertEqual(result.returncode, 0, result.stderr)
+        context, _ = self.launched_context()
+        self.assertEqual(context["team_config"]["max_workers"], 4)
+        self.assertIsNone(context["config_path"])
 
     def test_invalid_policy_fails_before_any_herdr_operation(self):
         config = Path(self.temp_dir.name) / "bad.json"

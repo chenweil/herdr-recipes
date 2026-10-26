@@ -15,11 +15,36 @@
 
 HTEAM_CONTEXT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")" && pwd -P)"
 
+# Walk up from the requested directory looking for .herdr-team.json, matching how
+# agents discover project .agents/skills. A linked worktree root carries its own
+# .git file, so hop to the main worktree root instead of stopping there: a worker
+# checkout must inherit the project's team policy.
+_ht_find_config() {
+  local target_dir="$1" dir common main_root
+  dir=$(cd "$target_dir" 2>/dev/null && pwd -P) || return 0
+  while :; do
+    [ -f "$dir/.herdr-team.json" ] && { printf '%s\n' "$dir/.herdr-team.json"; return 0; }
+    if [ -e "$dir/.git" ]; then
+      if [ -f "$dir/.git" ] && common=$(git -C "$dir" rev-parse --git-common-dir 2>/dev/null); then
+        case "$common" in /*) ;; *) common="$dir/$common" ;; esac
+        main_root=$(cd "$common/.." 2>/dev/null && pwd -P) || return 0
+        if [ -n "$main_root" ] && [ "$main_root" != "$dir" ]; then
+          dir="$main_root"
+          continue
+        fi
+      fi
+      return 0
+    fi
+    [ "$dir" = "/" ] && return 0
+    dir=$(dirname "$dir")
+  done
+}
+
 _ht_load_policy() {
   local target_dir="$1" coordinator_kind="$2" config_path="$3" worker_override="$4" max_override="$5"
   local body='{}' worker max
-  if [ -z "$config_path" ] && [ -e "$target_dir/.herdr-team.json" ]; then
-    config_path="$target_dir/.herdr-team.json"
+  if [ -z "$config_path" ]; then
+    config_path=$(_ht_find_config "$target_dir")
   fi
   HTEAM_CONFIG_PATH=""
   if [ -n "$config_path" ]; then
@@ -28,12 +53,17 @@ _ht_load_policy() {
     fi
     if ! body=$(jq -esc '
       if length == 1 and (.[0] | type == "object") then .[0] else error("expected one object") end
-      | select((keys - ["worker_kind", "max_workers"]) | length == 0)
+      | select((keys - ["worker_kind", "max_workers", "skills"]) | length == 0)
       | select(.worker_kind == null or (.worker_kind | type == "string" and test("^[a-z][a-z0-9_-]*$")))
       | select((has("max_workers") | not) or
           (.max_workers | type == "number" and . > 0 and . == floor))
+      | select((has("skills") | not) or (
+          (.skills | type) == "object"
+          and (((.skills | keys) - ["implement", "review", "diagnose", "route"]) | length) == 0
+          and ([.skills[] | type == "string" and test("^[a-z][a-z0-9_-]*$")] | all)
+        ))
     ' "$config_path"); then
-      echo "hteam: invalid team config: $config_path (worker_kind: kind or null; max_workers: positive integer)" >&2
+      echo "hteam: invalid team config: $config_path (worker_kind: kind or null; max_workers: positive integer; skills: object of implement/review/diagnose/route to skill name)" >&2
       return 2
     fi
     HTEAM_CONFIG_PATH="$(cd "$(dirname "$config_path")" && pwd -P)/$(basename "$config_path")"
@@ -46,7 +76,8 @@ _ht_load_policy() {
   if ! [[ "$worker" =~ ^[a-z][a-z0-9_-]*$ ]] || ! [[ "$max" =~ ^[1-9][0-9]*$ ]]; then
     echo "hteam: worker kind must be a kind name; max-workers must be a positive integer" >&2; return 2
   fi
-  HTEAM_POLICY=$(jq -n --arg kind "$worker" --argjson max "$max" '{worker_kind:$kind,max_workers:$max}')
+  HTEAM_POLICY=$(jq -n --arg kind "$worker" --argjson max "$max" --argjson skills "$(jq -c '.skills // {}' <<<"$body")" \
+    '{worker_kind:$kind,max_workers:$max,skills:$skills}')
 }
 
 _ht_context() {

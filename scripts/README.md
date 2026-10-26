@@ -61,14 +61,28 @@ worker 的具体任务和资源由模型决定。完整任务持续推进到交�
 目标目录的 `.herdr-team.json` 是可选配置，格式见 [示例](../config/hteam.example.json)：
 
 ```json
-{"worker_kind": null, "max_workers": 4}
+{"worker_kind": null, "max_workers": 4, "skills": {"implement": "implement"}}
 ```
 
+查找从 `-C` 目标目录向上逐级进行，命中第一个 `.herdr-team.json` 就停止，规则与
+agent 发现项目 `.agents/skills` 一致。linked worktree 的根目录自己带 `.git` 文件，
+这时先跳到主 worktree 根继续找，所以 worker checkout 会继承所属项目的团队配置。
+遇到不带配置的仓库根就停止，不跨仓库继承上层目录的文件。
+
 `worker_kind: null` 或省略表示沿用主协调者 kind；`max_workers` 省略为 4。
-只接受这两个字段，max_workers 必须为正整数；无效 JSON、拼错字段或显式缺失文件在
-创建资源前报错。`--config FILE` 优先于 `HTEAM_CONFIG`，两者都未给才查目标目录文件；
-`--worker-kind/--max-workers` 覆盖文件中的值。kind alias 与 hopen 共用，支持情况最终
-由 Herdr 判定；没有预先执行各 agent 的模型、账号或权限配置。
+`skills` 省略为 `{}`，键只接受 `implement`/`review`/`diagnose`/`route`，值为技能名。
+无效 JSON、拼错字段或显式缺失文件在创建资源前报错。`--config FILE` 优先于
+`HTEAM_CONFIG`，两者都未给才查目标目录文件；`--worker-kind/--max-workers` 覆盖文件
+中的值。kind alias 与 hopen 共用，支持情况最终由 Herdr 判定；没有预先执行各 agent
+的模型、账号或权限配置。
+
+`skills` 把角色映射到技能：已配置的角色按强制处理（实现走 `implement`、审查走
+`code-review`、排查走 `diagnosing-bugs`，不得用其它方法替代），未配置的角色按建议
+处理（协调者提议并写进提示词）。同一个规则按数据生效，需要固定流程的项目在
+`.herdr-team.json` 写上映射即可，没写的项目自然退化为建议。技能靠 skillcaddy 等
+工具软链到项目级或全局级，脚本不复制也不校验安装；协调者在派工前按 worker 实际
+kind 解析调用形式并在其可见技能目录下确认存在。细节与 `route` 的例外处理见
+[协调规则第 4 节](coordinator-prompt.md#角色技能约定)。
 
 用户本次明确要求优先于启动配置，启动配置优先于默认值。“这次六个 pi”由模型理解
 并临时调整约束，脚本不会解析任务文本或改写配置。上限跨本团队所有 tab/worktree
