@@ -100,8 +100,11 @@ team_config 是启动策略，config_path 记录来源。team_id 区分不同调
 在有准备/工作任务时按 [记录约定](coordinator-records.md) 建立资源表和每轮任务证据。
 该目录排除在提交之外，不能当成 GitHub Issues、权威运行状态或自动恢复队列。
 
-每次委托含任务 ID、目标、checkout/基线、写入范围、交付与验证要求。主协调者核对
-worker 实际文件、来源和检查结果，idle/done 或 `prompt --wait` 不是任务验收。
+每次委托含任务 ID、目标、checkout/基线、写入范围、交付与验证要求。回报格式要求
+worker 在正文前单独打印 `DONE <任务 ID>`。派工后的等待必须事件驱动：优先用
+`pane wait-output` 等该标记，否则用 `agent wait --until idle` 阻塞；禁止用分钟级
+`sleep` 盲等。主协调者核对完成标记、实际文件、来源和检查结果，
+idle/done 或 `prompt --wait` 不是任务验收。
 开发、review 等 worker 的模型/API 异常与停滞由协调者按
 [监督与恢复规则](coordinator-prompt.md#5-监督纠正与验证) 主动检查、恢复并核验进展；
 恢复失败达到上限后明确报告阻塞。
