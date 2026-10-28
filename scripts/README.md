@@ -115,11 +115,12 @@ team_config 是启动策略，config_path 记录来源。team_id 区分不同调
 该目录排除在提交之外，不能当成 GitHub Issues、权威运行状态或自动恢复队列。
 
 每次委托含任务 ID、目标、checkout/基线、写入范围、交付与验证要求。回报格式要求
-worker 在正文前单独打印 `DONE <任务 ID>`。派工后的等待必须事件驱动：优先用
-`pane wait-output` 等该标记，否则用 `agent wait --until idle` 阻塞；禁止用分钟级
-`sleep` 盲等。主协调者核对完成标记、实际文件、来源和检查结果，
-idle/done 或 `prompt --wait` 不是任务验收。
-开发、review 等 worker 的模型/API 异常与停滞由协调者按
+worker 在正文前单独打印 `DONE <任务 ID>`。派工后的等待必须事件驱动，且同时看两个
+信号：agent 生命周期（权威）与完成标记（加速），默认用 `hwait.sh` 合成一次等待；
+禁止单次超过 60 秒的 `wait-output` 盲等，也禁止分钟级 `sleep` 盲等。主协调者核对
+完成标记、实际文件、来源和检查结果，idle/done 或 `prompt --wait` 不是任务验收。
+自己再开 tab → agent 的角色对子 agent 负同等监督责任，子任务失败必须写进给上游的
+回报。开发、review 等 worker 的模型/API 异常与停滞由协调者按
 [监督与恢复规则](coordinator-prompt.md#5-监督纠正与验证) 主动检查、恢复并核验进展；
 恢复失败达到上限后明确报告阻塞。
 多 worktree 由主协调者整合并联合验证，可在完整实现任务中进行必要的本地提交/合并，
@@ -198,6 +199,47 @@ pane ID 与 workspace 联接，不会把其它 workspace 的 agent 混进来。
 这是顺序查询得到的一次快照，运行中状态可能变化；不推算 elapsed、activity 或
 Workflow 完成情况。不会发送 prompt、切换焦点、创建/关闭资源、改配置或安装 hook；
 初版不提供 `--watch`。
+
+## hwait.sh — 派工后的双信号等待
+
+```bash
+hwait.sh --agent t08-dev --pane w84:p19 --marker "DONE T08"
+hwait.sh --agent t08-dev --marker "DONE T08" --timeout 1800000 --slice 60000
+hwait.sh --pane w84:p19 --marker "DONE T08" --json
+hwait.sh --help
+hwait.sh -v                        # 与仓库 VERSION 一致
+```
+
+派工之后必须同时看两个信号，否则会漏掉一类失败：
+
+- **agent 生命周期是权威信号**。`pane wait-output` 只匹配屏幕文本，对 agent 退出
+  零感知：worker 崩掉后它只会耗满整个 `--timeout`。实测本机 Herdr 0.9.5：agent 被
+  SIGKILL 后 `agent wait` 在 6 秒内返回；身份释放后 `agent get` / `agent read` /
+  `agent wait` 立刻返回 `agent_not_found`（0.009 秒）。
+- **完成标记是加速信号**。Herdr 在轮询前先扫已有快照，标记已经在屏幕上时约 0.2 秒
+  命中。
+
+`hwait.sh` 把两者合成一次等待：先查一次标记快照，再用
+`agent wait --until idle --until blocked --until done --until unknown --timeout <分片>`
+阻塞到状态变化或分片结束，每片结束重新查标记。分片上限 60 秒，整体预算用
+`--timeout` 控制（默认 15 分钟）。它**不会**把整体预算交给一次长 wait-output。
+
+返回值、退出码与后续动作：
+
+| verdict | 退出码 | 含义 | 后续动作 |
+|---|---|---|---|
+| `marker` | 0 | 完成标记命中 | `agent read` 取全文，再核对文件/diff/验证结果 |
+| `settled` | 10 | agent 已落定但没有标记 | 读输出判定：报错走恢复；漏打标记则补记 |
+| `blocked` | 11 | agent 在等输入或授权 | 停下报告用户，不自行放行 |
+| `gone` | 12 | agent 身份消失（退出或被释放） | 确认失败，重建同角色 worker |
+| `unknown` | 14 | 状态不可判定 | 读输出判定，仍在推进就继续等 |
+| `timeout` | 13 | 整体预算耗尽 | 读现场判定，不把超时当成功也不当失败 |
+
+`settled` 不是成功判定：`done` 只表示 Herdr 认为 agent 已落定，可能是交付完成，
+也可能是模型/API 报错后停在提示符。JSON 契约为 `schema_version: 1`，含 `verdict`、
+`exit_code`、`next`、`marker`、`target`、`pane_id`、`state`、`matched_line`、
+`elapsed_ms`。参数错误 exit 2，Herdr 不可用或返回无效 JSON exit 1，stdout 不输出
+半份判定。它只读状态，不发送 prompt、不切换焦点、不创建或关闭资源。
 
 ## hopen.sh — 按代号开 herdr pane 布局
 

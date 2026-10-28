@@ -96,6 +96,12 @@ checkout 或明确 commit，不能把另一目录的绿灯当作该版本验证�
 要求，不夹带实现任务。共享 checkout 的写入按文件范围协调；多 worker 不同时写最终
 汇总文档，主协调者负责整合。
 
+派工后立刻记录 worker 的 agent name、pane ID、任务 ID，以及 `agent get` 返回的
+`agent_session.value`（session 文件路径）。name 是 Herdr 的身份句柄：进程退出后
+身份被释放，`agent get` / `agent read` / `agent wait` 立刻返回 `agent_not_found`，
+这是判定 worker 已经死了的最快信号；session 路径在终端滚屏后仍可取证。回报格式
+同时要求 worker 如实报告失败：无法完成时说明阻塞原因，不要打印完成标记。
+
 启动成功只代表 agent 可交互。按要求核对实际数量/kind、目录和 task/pane 对应关系，
 逐个确认提示词已提交。先检查状态，working/blocked 时先读取现场，避免叠加冲突任务。
 
@@ -141,31 +147,45 @@ status_entry 提供单 workspace 快照，团队归属按登记的精确 pane �
 
 ### 派工后的等待方式
 
-等待必须由 Herdr 事件驱动阻塞，不能用分钟级 `sleep` 盲等代替。`sleep 300` 这类写法
-分不出「已完成」和「仍在跑」，最坏延迟等于整段睡眠：worker 提前交付时协调者仍会
-空转到睡眠结束，等于人为制造交付延迟。按以下顺序选择等待方式：
+等待必须由 Herdr 事件驱动，而且必须同时看两个信号：agent 生命周期（权威）与完成
+标记（加速）。只等标记会在 worker 崩掉时变成盲等——`pane wait-output` 只匹配屏幕
+文本，对 agent 退出零感知，只会耗满整个 timeout；只等状态又会晚于内容就绪。默认
+用 `hwait.sh`（与本文件同目录；安装后在 `~/.config/herdr/scripts/`）把两个信号
+合成一次等待：
 
-1. **内容就绪（首选）**：派工已约定完成标记时，用
-   `pane wait-output <worker 的 pane ID> --match "DONE <任务 ID>" --timeout <ms>`。
-   该命令立即搜索已有快照，worker 早于等待就已打完标记时也马上命中。命中后再用
-   `agent read` 取完整交付；标记只证明这一行已打印，验收仍按上文核对实际文件/diff
-   与验证结果。工作 tab 里的普通测试或服务进程同样用 `wait-output` 等日志关键字。
-2. **状态变化（兜底）**：无标记或标记方案不可用时，用
-   `agent wait <目标> --until idle --timeout <ms>`（需要区分时叠加
-   `--until done --until blocked`），阻塞到状态变化再读现场。条件已满足时它立即返回，
-   所以不要因为「看起来已经 idle」就跳过等待改去 `sleep`。
-3. **周期观察（只在需要读进行中输出时）**：用单次不超过 60 秒的 `sleep` 加
-   `agent read` 观察长测试或活跃工具调用的进展，同一轮同时核对所有未验收 worker。
+```
+hwait.sh --agent <worker 名> --pane <pane ID> --marker "DONE <任务 ID>"
+```
 
-长任务要给足 `--timeout`，让阻塞覆盖预期时长，不要用短超时反复轮询。超时不等于失败
-结论：先 `agent get` 与 `agent read` 判定是停滞、报错还是仍在正常工作，再决定继续
-等待、恢复原会话或报告阻塞。
+返回值、退出码与后续动作：
+
+| verdict | 退出码 | 含义 | 后续动作 |
+|---|---|---|---|
+| marker | 0 | 完成标记命中 | `agent read` 取全文，再按验收标准核对文件/diff/验证结果 |
+| settled | 10 | agent 已落定（idle/done）但没有标记 | 读输出判定：报错按本节恢复；确有交付只是漏打标记则补记后按完成处理 |
+| blocked | 11 | agent 在等输入或授权 | 停下报告用户，不自行回答授权或提问界面 |
+| gone | 12 | agent 身份消失（进程退出或被释放） | 确认失败，按恢复规则重建同角色 worker |
+| unknown | 14 | 状态不可判定 | 读输出判定；仍在推进就继续等 |
+| timeout | 13 | 整体预算耗尽 | 读现场判定停滞/失败/仍在跑，不把超时当成功也不当失败 |
+
+`settled` 不是成功判定：`done` 只表示 Herdr 认为 agent 已落定，既可能是交付完成，
+也可能是模型/API 报错后停在提示符，还可能只是 TUI 抖动。必须读输出确认。
+
+不写脚本时按同样的顺序手写等待：先用 `pane wait-output --match "<标记>"` 查一次已有
+快照（命中立即返回，实测约 0.2 秒），再用 `agent wait <目标> --until idle --until
+blocked --until done --until unknown --timeout <分片>` 阻塞到状态变化或分片结束；
+分片不超过 60 秒，每片结束都要重新查标记。禁止把 `--timeout` 超过 60 秒的
+wait-output 当成等待手段，也禁止分钟级 `sleep` 盲等。需要看进行中的输出时用
+`agent read <目标> --source visible --format text`，单次观察不超过 60 秒，不用
+sleep 占位。超时不等于失败结论：先 `agent get` 与 `agent read` 判定是停滞、报错还是
+仍在正常工作，再决定继续等待、恢复原会话或报告阻塞。
 
 ### worker 异常与停滞恢复
 
 1. 每次有界等待返回后立即查询未验收 worker 的身份、状态与最新输出；对尚未开始
-   阻塞等待的 worker，在推进其它工作期间至少每 60 秒检查一次。已经用 `agent wait`
-   或 `wait-output` 阻塞盯住的 worker 不需要叠加定时轮询，事件返回就是检查时机。
+   阻塞等待的 worker，在推进其它工作期间至少每 60 秒检查一次。已经用 `hwait.sh`、
+   `agent wait` 或 `wait-output` 阻塞盯住的 worker 不需要叠加定时轮询，事件返回就是
+   检查时机。
    检查模型/API 错误、限流、连接失败、会话退出及等待输入等情况，
    即使状态仍为 working 也要读取现场。连续两次检查无新输出且无文件、工具或进程
    进展时进入诊断；正常运行的长测试或工具调用按其预期时长继续监督，不仅凭静默重启。
@@ -194,6 +214,23 @@ status_entry 提供单 workspace 快照，团队归属按登记的精确 pane �
 明确指定的 kind/人数不能擅自替换或减少；重建保持原 kind 和角色。更换 kind、模型、
 账号或降低交付要求需要已有授权，否则报告具体所需输入。这些检查与恢复由活跃的
 对话协调者执行，不代表对话结束后仍有后台监控或自动唤醒。
+
+### 嵌套委派（自己再开 tab → agent 的角色）
+
+协调者和被要求自行开发的下级角色是同一类角色：只要它自己创建 tab 并启动 agent，
+它对子 agent 就负与协调者同等的监督责任。下面三条与本节对 worker 的要求同强度：
+
+1. 派工后立刻记录子 agent 的 **name**、pane ID、任务 ID 和 session 路径
+   （`agent get` 的 `agent_session.value`）。name 是 Herdr 的身份句柄：进程退出后
+   身份被释放，`agent get` / `agent read` / `agent wait` 立刻返回 `agent_not_found`，
+   这是判定子 agent 已经死了最快的信号；session 路径在终端滚屏后仍可取证。
+2. 用 `hwait.sh` 等待子 agent，判定标准与上表一致。子 agent 报错、退出或卡在授权
+   界面时，委派方必须当场知道，而不是继续等一个不会出现的完成标记。
+3. 子任务失败必须写进给上游的回报（"子任务 X 失败：<错误摘要>"）。一段没有结果的
+   等待不能报告成"仍在进行"——上游只有看到失败，才能决定重建子 agent 还是改方案。
+
+子 agent 的失败不等于整项任务的失败：其它独立子任务继续推进，恢复动作按本节上限
+执行，达到上限就报告真实阻塞。
 
 ## 6. 整合、交付与收尾
 

@@ -11,6 +11,19 @@
 
 ### 新增
 
+- **派工后的双信号等待**（`scripts/hwait.sh`）：同时看 agent 生命周期（权威）与
+  `DONE <任务 ID>` 标记（加速），按不超过 60 秒的分片阻塞，返回
+  `marker`/`settled`/`blocked`/`gone`/`unknown`/`timeout` 六种判定与对应退出码。
+  只等标记会在 worker 崩掉时变成盲等——`pane wait-output` 对 agent 退出零感知，
+  只会耗满整个 `--timeout`；本机实测 Herdr 0.9.5：agent 被 SIGKILL 后 `agent wait`
+  6 秒内返回，身份释放后 `agent get`/`read`/`wait` 立刻返回 `agent_not_found`
+  （0.009 秒），而已在屏幕上的标记约 0.2 秒命中。
+
+- 协调规则新增「嵌套委派」条款：自己创建 tab 并启动 agent 的角色，对子 agent 负与
+  协调者同等的监督责任——派工即记录子 agent 的 name、pane ID、任务 ID 与 session
+  路径（name 是身份句柄，进程退出后身份释放），用 `hwait.sh` 等待，子任务失败必须
+  写进给上游的回报，不能把没有结果的等待报告成"仍在进行"。
+
 - 团队配置从目标目录向上逐级查找 `.herdr-team.json`，命中即止，规则与 agent 发现
   项目 `.agents/skills` 一致。linked worktree 根目录自带 `.git` 文件，先跳到主
   worktree 根继续找，因此 worktree 里的开发 worker 会继承所属项目的团队策略；遇到
@@ -29,6 +42,10 @@
   禁止分钟级 `sleep` 盲等，观察型 sleep 单次不超过 60 秒。修复 worker 提前交付而
   协调者因长睡眠未察觉导致的交付延迟（实测一次迟到约 4.5 分钟，原写法最坏可达
   8 分钟以上）。SKILL 必守约束增加对应的第五条。
+
+- 上述等待协议补上失败信号：生命周期与标记必须同时看，`settled`/`gone` 不再被当作
+  仍在进行，单次 wait-output 盲等被禁止。修复委派方在子 agent 报错退出后仍等待一个
+  永远不会出现的完成标记、最长空等整段 timeout 的问题。
 
 - 协调者主动监督开发、review 等 worker 的模型/API 异常与停滞，按有界恢复流程继续
   原会话或重建同角色 worker，保留已有改动与交接证据；达到恢复上限后明确报告阻塞。

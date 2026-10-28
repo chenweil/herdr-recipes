@@ -13,6 +13,7 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `scripts/hteam-context.sh` | Shared team policy and runtime context builder for the launcher and in-place coordination |
 | `skills/herdr-recipes/SKILL.md` | Natural-language entry to Recipes and conversational coordination, alongside the global herdr skill |
 | `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
+| `scripts/hwait.sh` | Wait for a delegated agent's completion marker or lifecycle change, and fail fast when the agent dies |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
@@ -83,6 +84,14 @@ smoke evidence does not establish the new multi-tab or worktree behavior; those 
 opt-in [live smoke](tests/smoke_hteam_workspace.py). The multi-tab, worktree integration and
 partial-failure scenarios passed with Herdr 0.9.5 and pi, alongside the explicit current-tab
 three-worker geometry regression; see [the dated evidence](docs/herdr-research.md#10-团队作用域协调2026-10-21adr-0003unreleased).
+
+Waiting after a dispatch uses two signals at once: the agent lifecycle is authoritative and the
+`DONE <task id>` marker is an accelerator. A marker-only wait is blind — `pane wait-output`
+cannot see an agent exit and would burn its whole timeout — while a lifecycle-only wait reports
+late. `scripts/hwait.sh` merges them into one sliced wait and reports `marker`, `settled`,
+`blocked`, `gone`, `unknown` or `timeout`; a role that creates its own tab and agent supervises
+that child with the same rule and must report a failed subtask instead of reporting “still
+running”. See [the script reference](scripts/README.md#hwaitsh--派工后的双信号等待).
 
 ## Project skill (`herdr-recipes`)
 
