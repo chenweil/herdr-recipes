@@ -466,16 +466,38 @@ _notify_dispatch() {
 }
 
 # 启动 agent。失败不阻断脚本，pane 留空；诊断信息仍写入 stderr。
-# 参数：agent_name pane_id kind [prompt]
+# 参数：agent_name pane_id kind [prompt] [agent_args...]
+#
+# 第 5 个及之后的参数是原生 agent 参数，会拼到
+# `herdr agent start ... -- <args...>` 后面（例如 --model <m>）。
+# 不传这些参数时，命令行与以前逐字一致（不会多出一个空的 `--`）。
 _start_agent() {
   local name="$1" pane="$2" raw_kind="$3" prompt="${4:-}" start_out kind prompt_out
   kind=$(_resolve_kind "$raw_kind")
 
-  if ! start_out=$(herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout 60000 2>&1); then
-    [ -z "$start_out" ] || printf '%s\n' "$start_out" >&2
-    echo "[hopen] 跳过 $name: '$kind' 启动失败（herdr agent start 返回非 0）" >&2
-    _record_dispatch_failure "agent start failed: $name ($kind)"
-    return 0
+  # 把第 5 个及之后的参数收成数组；bash 3.2 下空数组展开会触发 set -u，
+  # 所以只在数组非空时才展开。
+  if [ "$#" -gt 4 ]; then
+    shift 4
+  else
+    shift "$#"
+  fi
+  local agent_args=("$@")
+
+  if [ "${#agent_args[@]}" -gt 0 ]; then
+    if ! start_out=$(herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout 60000 -- "${agent_args[@]}" 2>&1); then
+      [ -z "$start_out" ] || printf '%s\n' "$start_out" >&2
+      echo "[hopen] 跳过 $name: '$kind' 启动失败（herdr agent start 返回非 0）" >&2
+      _record_dispatch_failure "agent start failed: $name ($kind)"
+      return 0
+    fi
+  else
+    if ! start_out=$(herdr agent start "$name" --kind "$kind" --pane "$pane" --timeout 60000 2>&1); then
+      [ -z "$start_out" ] || printf '%s\n' "$start_out" >&2
+      echo "[hopen] 跳过 $name: '$kind' 启动失败（herdr agent start 返回非 0）" >&2
+      _record_dispatch_failure "agent start failed: $name ($kind)"
+      return 0
+    fi
   fi
 
   echo "[hopen] $name → $kind on $pane" >&2

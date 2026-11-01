@@ -1,0 +1,61 @@
+# dev-review —— 开发 → 审查 → 提交。最小可用样板。
+# 用法: hsuper.sh --flow dev-review --task "实现登录功能"
+#
+# 提示词里的 {{marker}} 是完成标记，只有 worker 会把它打印到终端；
+# 监督器提交给 agent 的只有一句「读取 <run_dir>/prompts/<step>.md 并执行」，
+# 所以标记串不会出现在任何命令行里。
+#
+# model 留空 = 沿用该 agent 自身配置。要钉死模型就写死一个本机确实存在的
+# 模型名，例如 model = "gpt-5-codex"——名字不对会在启动时直接报错。
+
+[flow.dev-review]
+description = "开发 → 审查 → 提交"
+# cwd 由 -C 决定（默认 $PWD），不在 flow 里写死
+max_parallel = 2
+
+[flow.dev-review.defaults]
+kind = "codex"
+model = ""                      # 空 = 沿用 codex 自身配置
+
+[flow.dev-review.steps.dev]
+role = "实现"
+kind = "codex"
+# model = "gpt-5-codex"         # 想钉死模型时打开这一行
+prompt = """
+任务：{{task}}
+
+你是实现者。要求：
+1. 先读 AGENTS.md / CONTEXT.md，遵守仓库既有约定
+2. 只改本任务相关文件，不动无关代码
+3. 完成后把结果写入 {{run_dir}}/result/dev.json：
+   {"status":"done","changed_files":[...],"tests_run":N,"summary":"..."}
+4. 在终端单独一行打印：{{marker}}
+5. 失败时不要打印完成标记，把原因写进 result/dev.json 的 status="failed"
+"""
+expect = ["{{run_dir}}/result/dev.json"]
+next = ["review"]
+
+[flow.dev-review.steps.review]
+role = "审查"
+kind = "pi"
+prompt = """
+任务：审查 dev 步骤的实现。
+
+输入：{{run_dir}}/result/dev.json 与工作目录的实际 diff。
+只报阻塞问题，不要重写。完成后写入 {{run_dir}}/result/review.json，
+在终端单独一行打印：{{marker}}。
+"""
+expect = ["{{run_dir}}/result/review.json"]
+next = ["commit"]
+
+[flow.dev-review.steps.commit]
+role = "提交"
+kind = "codex"
+prompt = """
+任务：提交 dev 步骤的改动。
+
+要求：仅提交本任务涉及的路径，保护用户无关改动；
+排除 .herdr-recipes/。不 push。
+完成后写入 {{run_dir}}/result/commit.json，打印：{{marker}}。
+"""
+expect = ["{{run_dir}}/result/commit.json"]

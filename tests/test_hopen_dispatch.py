@@ -1064,5 +1064,47 @@ class LayoutRollbackTests(FakeHerdrLauncherFixture, unittest.TestCase):
                 self.assertEqual(len(self.calls_for(self.read_calls(), "pane", "close")), 3)
 
 
+class StartAgentNativeArgsTests(FakeHerdrLauncherFixture, unittest.TestCase):
+    """`_start_agent` gained an optional native-args list.
+
+    The four-argument call must keep behaving exactly as before — the command
+    line must not gain a stray `--` — while the five-argument call appends the
+    native arguments after `--`.
+    """
+
+    def run_start(self, *extra):
+        directory = tempfile.mkdtemp()
+        script = os.path.join(directory, "call.sh")
+        with open(script, "w") as handle:
+            # _start_agent takes (name, pane, kind, prompt) and then the
+            # optional native args, so the prompt slot is passed empty here.
+            handle.write('source "$1"\n'
+                         '_start_agent "$2" "$3" "$4" "" ${5+"$5"} ${6+"$6"}\n')
+        environment = self.environment.copy()
+        result = subprocess.run(
+            ["bash", script, str(REPO_ROOT / "scripts" / "hopen.sh"),
+             "testagent", "w-test:p1", "codex", *extra],
+            cwd=REPO_ROOT, env=environment, capture_output=True, text=True)
+        return result
+
+    def test_four_argument_call_keeps_the_original_command_line(self):
+        result = self.run_start()
+        starts = self.calls_for(self.read_calls(), "agent", "start")
+        self.assertEqual(len(starts), 1, result.stderr)
+        self.assertNotIn("--", starts[0])
+        self.assertEqual(
+            starts[0],
+            ["agent", "start", "testagent", "--kind", "codex",
+             "--pane", "w-test:p1", "--timeout", "60000"])
+
+    def test_native_args_are_appended_after_a_double_dash(self):
+        result = self.run_start("--model", "gpt-5-codex")
+        starts = self.calls_for(self.read_calls(), "agent", "start")
+        self.assertEqual(len(starts), 1, result.stderr)
+        self.assertIn("--", starts[0])
+        separator = starts[0].index("--")
+        self.assertEqual(starts[0][separator + 1:], ["--model", "gpt-5-codex"])
+
+
 if __name__ == "__main__":
     unittest.main()
