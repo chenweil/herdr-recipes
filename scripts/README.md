@@ -9,8 +9,8 @@
 `herdr-pane-switch.py` 与 `hstatus.py` 自己读同一个文件。发版只改 `VERSION` 一处。
 
 ```bash
-hopen.sh -v                 # hopen 0.9.0
-hopen-once.sh --version     # hopen-once 0.9.0
+hopen.sh -v                 # hopen 0.10.0
+hopen-once.sh --version     # hopen-once 0.10.0
 ```
 
 安装后 `~/.config/herdr/scripts` 是指向仓库的 symlink，所以 `_hr_version` 用
@@ -240,6 +240,89 @@ hwait.sh -v                        # 与仓库 VERSION 一致
 `exit_code`、`next`、`marker`、`target`、`pane_id`、`state`、`matched_line`、
 `elapsed_ms`。参数错误 exit 2，Herdr 不可用或返回无效 JSON exit 1，stdout 不输出
 半份判定。它只读状态，不发送 prompt、不切换焦点、不创建或关闭资源。
+
+## hsuper.sh — 受监督派发
+
+```bash
+hsuper.sh --flow dev-review --task "实现登录功能"
+hsuper.sh --flow-file ./my-flow.toml --task "..." --dry-run
+hsuper.sh --run <run_id> --resume
+hsuper.sh --help
+hsuper.sh -v                        # 与仓库 VERSION 一致
+```
+
+`hsuper` 把协调规则 §5 已经写好的恢复策略，从提示词搬进确定性脚本。
+同一套策略（**2 次原会话恢复 → 1 次重建 → 分支失败**），换一个不困不累
+不遗忘的执行者。
+
+它不是 workflow 引擎：流程是一段平铺的 `next` 链，一个分支失败不影响其它
+分支，整件事活在同一个 herdr session 里。流程文件规范见
+[`flows/_schema.md`](../flows/_schema.md)。
+
+### 启动结构
+
+```
+workspace
+├── tab "supervisor"   1 个 pane —— 监督器自己（可见、可打断）
+└── tab "workers"      每个步骤 1 个 pane
+```
+
+监督器先建好 workspace 与 supervisor tab，再把自己 re-exec 进那个 pane
+（`pane run <pane> "hsuper.py --run <id> --in-pane"`），于是失败原因直接
+看得见。`--foreground` 可以不 re-exec，直接在前台跑（调试用）。
+
+### 完成标记与证据门槛
+
+`pane wait-output` 会**先搜索已有快照**，所以标记串只要出现在屏幕上（包括
+被回显）就会立刻命中。对策是双保险：
+
+1. **提示词走文件**：`prompts/<step>.md` 落盘，终端上只出现
+   `读取 <run_dir>/prompts/dev.md 并执行` —— 标记串从未出现在命令行里。
+2. **标记只是候选**：即便命中，仍必须通过 `gate_ok`（`expect` 里的产物
+   存在 + `result/<step>.json` 可解析且 `status=done`）才推进。命中但门槛
+   不过 → 判定为回显误报，重新武装等待（最多 2 次，之后转入恢复梯）。
+
+worker 之间的数据一律走文件，不走 `agent read` + 翻滚屏。
+
+### 恢复梯
+
+| 序 | 触发 | 动作 | 记录 |
+|---|---|---|---|
+| 1–2 | worker 报错 / 超时停滞 / 状态不可判定 | **原会话恢复**：向同一会话提交继续提示 | `handoff/<step>-a<N>.md` |
+| 3 | 原会话恢复失败，或 worker 已消失 | **重建**：同 pane 同名重启 + 交接记录 | `handoff/<step>-rebuild.md` |
+| 4+ | 重建后仍同类故障 | **分支失败**：记 `state.json` + 通知人，**其它分支继续** | `state.json` |
+
+`gone`（worker 身份消失）直接进重建——原会话已经不存在，没法恢复。
+
+本机实测（Herdr 0.9.5）决定了重建的两处细节：herdr 会在进程消失后**短暂
+保留 agent 名字**，抢着重建会撞上 `agent_name_taken`，所以重建先停掉旧会话
+再等名字释放；旧 pane 没能回到 shell 提示符时回退到新 pane，并写进
+`state.json` 的 `deviations[]`，不允许静默偏离。
+
+`retries` / `rebuilds` 默认就是 2 / 1。超过上限要显式加
+`--allow-unsafe-limits`——这 2+1 是**策略**不是**能力**，悄悄改成无限重试
+会让整个设计失去意义。
+
+### 退出码
+
+| 码 | 含义 |
+|---|---|
+| 0 | 全部步骤通过 |
+| 1 | 启动 / 参数 / flow 校验错误 |
+| 20 | 至少一个分支失败（恢复预算用尽） |
+| 21 | 至少一个分支 `blocked`（等人工输入） |
+| 22 | 全局超时预算耗尽 |
+| 23 | 部分成功：没有分支失败或阻塞，但有步骤被跳过 |
+
+### 状态与续跑
+
+状态写在 `<cwd>/.herdr-recipes/runs/<时间戳>-<run_id>/state.json`，每次变更
+原子写（写 `.tmp` 再 `os.replace`），监督器被杀也留下可读的状态。run 目录
+里同时存一份 `flow.toml`，所以续跑用的是**这次 run 当时的流程定义**，
+改了 `flows/*.toml` 不会影响已经开始的那次 run。
+
+`--resume` 重跑 `status` 为 `pending` / `running` / `failed` 的步骤；`done`
+的步骤跳过且不重新派工；`blocked` 的步骤保持原状。
 
 ## hopen.sh — 按代号开 herdr pane 布局
 

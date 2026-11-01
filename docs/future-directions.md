@@ -21,6 +21,7 @@
 | §3.2 / §3.3 / §3.5 | hook、sidebar、.hopenrc 均为候选，尚未评审 |
 | §3.4 hclean | 与 ADR-0001 排除 cleanup 的边界冲突，需先决策，暂不实施 |
 | 对话式协调 hteam | 已实现并验证（#15，ADR-0002，Unreleased）；pi/pi 实测先待命、后委托与汇总 |
+| 受监督派发 hsuper | 已实现并验证（提案 0001，ADR-0004，0.10.0）；`flows/dev-review` 样板，2+1 恢复梯机械化，状态落盘可 `--resume` |
 | §3.6 / §3.7 | PR followup 暂缓；Spec → Tickets 不做 |
 
 本文不重述 ADR-0001 已确立的边界（Recipe Launcher ≠ Workflow Engine），也不重复 `herdr-research.md` 的事实记录。所有建议在此前提下提出。
@@ -482,5 +483,6 @@ hook / sidebar / `.hopenrc` 仍是候选；`hclean` 先解决 ADR 边界，PR fo
 | `CONTEXT.md` | 词汇层 |
 | `docs/adr/0001-keep-recipes-separate-from-workflows.md` | 边界层 |
 | `docs/herdr-research.md` | 事实层（Herdr 调研记录、社区项目清单、本机环境观察、smoke matrix）|
+| `docs/competitive-pi-shepherdr.md` | 竞品层（与 `pi-shepherdr` 的范式对比：代码换确定性 vs prompt 换无隐藏状态）|
 | `README.md` | 用户层 |
 | `scripts/README.md` | 脚本使用层 |

@@ -31,3 +31,7 @@ a Workflow runtime or own its lifecycle.
 - Repository-owned worktree orchestration, DAG execution, retry/resume, collection and cleanup
   remain outside the launcher boundary. A conversational agent may perform authorized local
   worktree integration, evidence collection and bounded resource reuse under ADR-0003.
+- ADR-0004 narrows the retry/recovery clause for one case: the `hsuper` launcher runs a
+  declared flow inside a live supervised run and performs the bounded 2+1 recovery ladder
+  that ADR-0003 already assigns to the conversational coordinator. Outside such a run there
+  is still no retry runtime.

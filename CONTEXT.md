@@ -40,3 +40,9 @@ _Avoid_: All agents in the workspace, implicit project-wide control
 Local notes linking a team's tasks, resources, deliverables and checked evidence. They support
 reconciliation with live state; they do not schedule work or promise automatic recovery.
 _Avoid_: Task queue, authoritative runtime state
+
+**Supervised Run**:
+A single execution of a declared flow (`flows/*.toml`) by the `hsuper` supervisor: one run,
+one Herdr session, bounded recovery inside it. A Supervised Run writes state so `--resume`
+can continue it; it is not a Workflow runtime, a daemon, or cross-session auto-resume.
+_Avoid_: Workflow engine, daemon, task queue

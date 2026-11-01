@@ -14,6 +14,9 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 | `skills/herdr-recipes/SKILL.md` | Natural-language entry to Recipes and conversational coordination, alongside the global herdr skill |
 | `scripts/hstatus.sh` | Read-only pane and agent snapshot for the caller or an explicit workspace, with text or JSON output |
 | `scripts/hwait.sh` | Wait for a delegated agent's completion marker or lifecycle change, and fail fast when the agent dies |
+| `scripts/hsuper.sh` | Run a declared flow with deterministic bounded recovery (2 resumes, then 1 rebuild, then the branch fails) |
+| `flows/dev-review.toml` | Worked example flow: develop → review → commit |
+| `flows/_schema.md` | Flow file format: every field, the validation rules, the exit codes |
 | `scripts/agent-audit.py` | Read-only Herdr version, kind, executable, and integration audit |
 | `scripts/herdr-pane-switch.py` | Switch to the N-th pane (1-based) in the active workspace |
 | `scripts/version.sh` | Shared version reader (`-v` / `-V` / `--version`) |
@@ -30,10 +33,12 @@ Personal recipes for [herdr](https://herdr.dev) — key bindings, layout presets
 Every script accepts `-v`, `-V`, or `--version`:
 
 ```bash
-./install.sh --version                  # herdr-recipes 0.9.0
-scripts/hopen.sh -v                     # hopen 0.9.0
-scripts/hopen-once.sh -v                # hopen-once 0.9.0
-scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.9.0
+./install.sh --version                  # herdr-recipes 0.10.0
+scripts/hopen.sh -v                     # hopen 0.10.0
+scripts/hopen-once.sh -v                # hopen-once 0.10.0
+scripts/hwait.sh -v                     # hwait 0.10.0
+scripts/hsuper.sh -v                    # hsuper 0.10.0
+scripts/herdr-pane-switch.py -v         # herdr-pane-switch 0.10.0
 ```
 
 The number lives in `VERSION` at the repo root; `scripts/version.sh` is the single
@@ -146,6 +151,45 @@ The verified run prepares the 111 layout with three pi in a new workspace, keeps
 coordinator's workspace and its single pane, matches the 111 geometry (50% / 25% / 25%),
 and closes every workspace afterwards. Codex must be installed and authenticated, since the
 smoke starts a real coordinator.
+
+## Fixed flows (`hsuper.sh`)
+
+Exploratory work goes to `hteam.sh`: you describe the goal and the coordinator decides
+how to split it. When the shape is already known — the same steps in the same order,
+every time — declare it once as a flow file and let a script run it:
+
+```bash
+scripts/hsuper.sh --flow dev-review --task "实现登录功能"
+scripts/hsuper.sh --flow dev-review --task "..." --dry-run   # validate + plan only
+scripts/hsuper.sh --run <run_id> --resume                     # continue a killed run
+```
+
+The difference is who recovers when a worker dies. `hteam.sh` relies on the
+conversational coordinator to notice a dead worker and restart it — which needs the
+coordinator to be waiting, to remember the task, and to be free at that moment.
+`hsuper.sh` runs the same recovery policy as a script, so a worker that errors no
+longer ends the run silently:
+
+| verdict | what happened | what `hsuper` does |
+|---|---|---|
+| worker finished | marker seen | checks the evidence, then advances |
+| worker errored | session settled without a result | resume the same session (up to 2×), then rebuild it (1×) |
+| worker died | session gone | rebuild it: same pane, same name, with a handoff record |
+| worker is waiting | needs a human | marks the branch blocked, other branches continue |
+| out of retries | same failure after the ladder | marks the branch failed, other branches continue |
+
+It is **not** a workflow engine: a flow is a flat `next` chain, one branch failing does
+not stop the others, and the whole run lives inside one Herdr session. There is no
+daemon, no task queue, and no auto-resume after the session ends.
+
+The supervisor runs in its own pane, so the run is visible and interruptable. Flows live
+in [`flows/`](flows/) — [`flows/_schema.md`](flows/_schema.md) documents every field, and
+[`flows/dev-review.toml`](flows/dev-review.toml) is a worked example (develop → review →
+commit). The boundary is written down in
+[ADR-0004](docs/adr/0004-supervised-dispatch-boundary.md).
+
+Choose by shape, not by size: a goal that needs judgement about how to split it is
+`hteam.sh`; a sequence you already know is `hsuper.sh`.
 
 ## Workspace status (`hstatus.sh`)
 

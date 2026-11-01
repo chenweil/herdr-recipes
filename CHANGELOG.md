@@ -9,7 +9,27 @@
 
 ## [Unreleased]
 
+## [0.10.0] - 2026-11-02
+
 ### 新增
+
+- **受监督派发**（`scripts/hsuper.sh`）：把协调规则 §5 已经写好的恢复策略从提示词搬进
+  确定性脚本。流程是一个声明式 TOML（`flows/*.toml`），监督器按平铺的 `next` 链执行，
+  worker 报错时按 **2 次原会话恢复 → 1 次重建 → 分支失败** 的固定阶梯处理，其它分支
+  继续推进。同一套策略，换一个不困不累不遗忘的执行者——之前这套策略由对话式协调者
+  执行，要求它恰好在等、记得住（上下文压缩前）、且有空，任何一条不满足流程就静默中断。
+  监督器跑在专用 supervisor pane 里（可视、可打断），并把状态原子落盘，`--resume`
+  可以续跑被杀掉的 run。流程文件规范见 `flows/_schema.md`，边界见 ADR-0004。
+
+- 完成标记只作**候选**：`pane wait-output` 会先搜索已有快照，所以标记串只要出现在屏幕上
+  （包括被回显）就会立刻命中。对策是双保险——提示词走文件落盘（终端上只有一句
+  「读取 <run_dir>/prompts/<step>.md 并执行」，标记串从不进入命令行），且标记命中后仍
+  必须通过证据门槛（`expect` 产物存在 + `result/<step>.json` 可解析且 `status=done`）
+  才推进；命中但门槛不过判定为回显误报，重新武装等待（最多 2 次，之后转入恢复梯）。
+
+- `herdr agent start` 现在支持透传原生参数：`hopen.sh` 的 `_start_agent` 增加可选的第 5
+  个参数（数组），拼到 `herdr agent start … -- <args…>` 之后，因此派工时终于可以指定
+  模型（`--model <m>`）或任何 kind 专属开关。现有 4 参数调用的命令行逐字不变。
 
 - **派工后的双信号等待**（`scripts/hwait.sh`）：同时看 agent 生命周期（权威）与
   `DONE <任务 ID>` 标记（加速），按不超过 60 秒的分片阻塞，返回
@@ -36,6 +56,21 @@
   当前对话的可用技能等于 worker 的可用技能。配置校验拒绝未知角色与非技能名值。
 
 ### 修复
+
+- code review 修复：`settled` 判定下 gate 未通过不再无限自旋（与 marker 分支共用
+  rearm 上限，超出后转恢复梯）；布局代号的 `LAST` 恢复 hopen.sh 的语义（上一次
+  split *创建*的 pane，而非上一个父 pane——两者在 12/13/22/31 等链式布局上几何
+  不同）；占位符校验覆盖 `expect` 与 `prompt_file`（此前笔误到运行期才暴露）；
+  重建改名后的 agent 交互一律读状态里记录的名字（此前 submit/wait 仍用重算名，
+  重建等于白做）；`--resume` 支持从项目子目录续跑（向上查找 run 目录）；
+  `max_parallel` 真正生效（独立步骤线程并发，state 写串行化，`1` = 严格串行）；
+  `agent start --help` 的 kind 列表解析剥掉 clap 的方括号（此前最后一个 kind
+  无法选用）；参数与未知 flag 的退出码统一为文档约定的 1（argparse 默认 2）。
+
+- `hsuper` 的重建步骤不再与 herdr 的 agent 名字释放抢跑：本机实测 Herdr 0.9.5 在进程
+  消失后仍**短暂保留** agent 名字，抢着重建会撞上 `agent_name_taken`；旧 pane 没能回到
+  shell 提示符时还会撞上 `agent_pane_busy`。重建因此先停掉旧会话再等名字释放，两者都
+  不成时回退到新 pane / 新名字，并写进 `state.json` 的 `deviations[]`——不允许静默偏离。
 
 - 派工后的等待改为事件驱动：协调规则要求在回报格式中约定 `DONE <任务 ID>` 完成标记，
   优先用 `pane wait-output` 等内容就绪信号，否则用 `agent wait --until idle` 阻塞；

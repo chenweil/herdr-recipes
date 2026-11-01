@@ -717,3 +717,64 @@ Herdr 0.9.5、pi 主协调者与 pi worker，临时项目及独立 server。新 
 协调者已核对该笔记并正确交付部分报告。测试改为在执行记录之外的项目 Markdown
 交付中检查来源证据，避免用协调者记录冒充独立 worker 产物；重跑通过。未放宽实际
 人数、类型、缺口说明或来源证据断言。
+
+## 11. 受监督派发 hsuper（2026-10-28/29，提案 0001，0.10.0）
+
+### 设计期已核实的前提（§16.0）
+
+`.herdr-recipes/` 已被 `.gitignore` 覆盖、`tomllib` 可用（3.14.6）、`hwait.py` 可
+import（`wait_for`/`marker_check`/`wait_state`）、`_start_agent` 未传
+`-- [AGENT_ARG]`、`herdr agent start` 支持 `-- [AGENT_ARG]...`、
+`pane process-info` 返回 `foreground_processes[].pid/argv0` 与 `shell_pid`、
+`agent list` 的 `name` 仅命名 agent 才有、`notification` 只有 `show` 子命令。
+
+### 实测记录（herdr 0.9.5，隔离 server + 用户 server 各有交叉验证）
+
+| # | 待测 | 结论 |
+|---|---|---|
+| 1 | agent 退出后 pane 是否回 shell | 回。杀掉 worker 进程后 `pane process-info` 的前台只剩 shell，`shell_pid` 不变。**注意：ctrl+c 对 idle 的 pi TUI 完全无效**（发两次也不退出、不弹确认），停一个活着的 worker 只能杀它的进程（`pane process-info` 拿 pid，`kill` TERM→KILL）。 |
+| 2 | 同 pane 同名重建可行性 | 可行。进程被杀后名字约 0.6s 内释放，同 pane 同名 `agent start` 实测 3.2s 成功。名字未释放时 `agent_name_taken`，pane 未回提示符时 `agent_pane_busy`（0.9.5 文案：`not an available shell`）。 |
+| 3 | `agent start -- --model X` 实际效果 | `-- [AGENT_ARG]` 原样透传给 agent（`pi` 状态栏显示所选模型）。kind 校验从 `herdr agent start --help` 的 possible values 运行时读取，不硬编码。 |
+| 4 | hwait 对 SIGKILL 的 `gone` 延迟 | 复跑确认 0.9.5 不变：`agent wait` 对已死 target 数秒内报 `agent_not_found`；`pane wait-output` 对已消失 pane 的快照仍可命中，所以 marker 先行、生命周期信号兜底的顺序不变。 |
+| 5 | `pane run` re-exec 行为 | `pane run` 队列化提交；子进程带 `--in-pane` 直接进监督循环，不再走 `launch_supervisor`，无递归。`--in-pane` 下 stdout/stderr tee 到 `logs/supervisor.log`，pane 上仍实时可见。 |
+
+### smoke 期间追加的实测（kill/pane 注入）
+
+- `pane close` 是最可靠的「worker 消失」注入：close 后 `agent get` 立即
+  `agent_not_found`，重建走 fallback-pane 回退路径（`deviations[]` 记
+  `restart_new_pane`）。
+- 对活 worker 的进程注入不可靠：`pane process-info` 的快照会滞后（`foreground_processes`
+  里的 pid 在 `agent start` 刚返回时可能还是 shell 初始化进程，杀它杀错对象），杀单
+  pid 会漏掉 helper 子进程（agent 继续工作），即使 `argv0=="pi"` 且进程组 kill 返回 0
+  也观察到 worker 未受影响继续完成。恢复类注入一律用 `pane close`；生产恢复路径
+  （rebuild）仍先尝试杀进程组，因为那时 worker 已知死了或 pane 已空。
+- smoke 场景之间要关掉各自 workspace 并给新 server 时间：存活 agent 累积或 server 忙
+  碌时，下一个场景的 `agent start` 会超时；`pane close` 与 supervisor 自己的
+  `agent start` 也存在竞态，注入必须等「提交已发生」的日志行出现后再动手。
+
+### 实测发现并已修复的契约差异
+
+- `herdr agent prompt --timeout` **必须**搭配 `--wait`，单独 `--timeout` 以 exit 2 拒绝
+  （`--timeout requires --wait`）。提交用 `--wait --until working --until done`：默认
+  settled 匹配要等整轮完成（pi 首轮实测 40–60s），那不是提交的职责；resume 用裸提交，
+  worker 可能还在处理上一条 prompt。
+- `agent prompt --wait` 的 stall gate：提交后 5s 内未观察到 working/blocked 报
+  `agent_prompt_stalled`（慢启动第一轮偶发）。文本通常已写入，因此 stalled 不判死分支，
+  交给双信号等待与恢复梯。
+- `agent list` / `agent get` 都没有 pid 字段；worker 进程 pid 只能从
+  `pane process-info` 的 `foreground_processes` 里取（非 `shell_pid` 的条目）。
+- 刚 split 的 pane 不一定已在 shell 提示符，立即 `agent start` 报 `agent_pane_busy`；
+  先等 `shell_pid` 出现在前台再启动。
+
+### 自动化验证
+
+- `tests/test_hsuper_flow.py`（§7.2 全部 8 条规则 + dry-run）、`tests/test_hsuper_prompt.py`
+  （占位符/标记隔离/gate）、`tests/test_hsuper_recovery.py`（恢复梯判决表 + 假 herdr
+  端到端四序列，假 worker 用真实 fixture 进程模拟进程被杀的 pane/名字语义）、
+  `tests/test_hsuper_state.py`（原子落盘/resume 选择/in-pane tee）、
+  `tests/test_hsuper_resources.py`（建资源失败回滚）。全量 218 项通过。
+- `tests/smoke_hsuper.py`：隔离 server + 真实 pi worker，`--live-agents` 显式开启：
+  dry-run 不建资源；happy 全程 exit 0；持续失败注入走满 2 resume + 1 rebuild 后分支
+  失败（exit 20），独立分支照常 done，handoff a1/a2/rebuild 三份齐全；
+  `--kill-gone` 注入 SIGKILL 验证 gone→rebuild→交付。场景之间关掉各自 workspace，
+  否则存活 agent 累积，第 4 个场景的 agent start 会在高负载下超时。
