@@ -2,7 +2,7 @@
 
 | 项 | 值 |
 |---|---|
-| 状态 | 已实现（0.10.0；实测记录见 `docs/herdr-research.md` §11，偏差已回写 §8/§9） |
+| 状态 | 已实现（0.10.0；实测记录见 `docs/herdr-research.md` §11，偏差已回写 §8/§9；退出码与 resume 语义已与实现对齐，见 §8.1 / §10） |
 | 日期 | 2026-10-28 |
 | 作者 | 对话式协调 + 用户决策 |
 | 目标版本 | 0.10.0 |
@@ -257,12 +257,17 @@ hsuper.sh --run RUN_ID [--resume]
 
 | 码 | 含义 |
 |---|---|
-| 0 | 全部步骤 marker + gate 通过 |
-| 1 | 启动/参数/flow 校验错误 |
-| 20 | 至少一个分支失败（超恢复上限） |
+| 0 | 全部步骤通过 |
+| 1 | 启动 / 参数 / flow 校验错误 |
+| 20 | 至少一个分支失败（恢复预算用尽） |
 | 21 | 至少一个分支 `blocked`（等人工输入） |
-| 22 | 全局超时预算耗尽 |
-| 23 | 部分成功（有失败分支，但有步骤完成） |
+| 22 | 全局超时预算耗尽，运行被截断（有步骤没派工） |
+| 23 | 部分成功：有步骤被跳过，但没有失败/阻塞分支，且预算未耗尽 |
+
+优先级 20 > 21 > 22 > 23 > 0：分支失败不会被包装成部分成功（ADR-0004）。
+22 指预算把这次 run **截断**了（有步骤没派工）；预算到了但所有步骤都跑完，仍是 0。
+
+这张表与 `flows/_schema.md`、`scripts/README.md` 是同一张表；改一处就要改三处。
 
 ### 8.2 启动流程（对应决策 1①）
 
@@ -405,7 +410,7 @@ pane process-info --pane <pane>
 
 `status` 取值：`pending` / `running` / `done` / `failed` / `blocked` / `skipped`。
 
-**resume 语义**：`--resume` 只重跑 `status in {pending, running, failed}` 且其依赖已 `done` 的步骤；`done` 步骤跳过且不重新派工；`blocked` 步骤保持（除非 `--retry-blocked`，v0.11 再议）。
+**resume 语义**：`--resume` 重跑 `status in {pending, running, failed, skipped}` 的步骤（`skipped` 的步骤从没跑过，它的工作还欠着这次 run）；选中集合对依赖封闭——一个步骤只有在它的依赖已 `done` 或本轮也会重跑时才被选中；`done` 步骤跳过且不重新派工；`blocked` 步骤保持（除非 `--retry-blocked`，v0.11 再议），并且这次 run 仍然以 **21** 结束——还有分支在等人，run 就没算完成。
 
 ## 11. 报告
 
@@ -596,4 +601,4 @@ conditionals, or automatic publishing.
 - [x] `CHANGELOG.md`：Unreleased 新增
 - [x] `CONTEXT.md`：如引入新词（**Supervised Run**），补词条；否则不动
 - [x] `docs/future-directions.md`：§3 增加「受监督派发」状态条目
-- [x] `docs/herdr-research.md`：§16 六项实测结果
+- [x] `docs/herdr-research.md`：§11 六项实测结果

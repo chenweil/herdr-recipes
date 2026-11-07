@@ -386,17 +386,27 @@ class RecoveryRunTests(unittest.TestCase):
         # analysis); drop it so callers can filter by ["agent", "start"].
         return [json.loads(line)[1:] for line in self.log_path.read_text().splitlines()]
 
-    def run_flow(self, verdicts, task="任务", flow_text=None):
+    def run_flow(self, verdicts, task="任务", flow_text=None, extra=()):
         self.verdicts(*verdicts)
         flow_path = self.folder / "sample.toml"
         flow_path.write_text(flow_text or FLOW, encoding="utf-8")
         entry = SCRIPTS / "hsuper.py"
         result = subprocess.run(
             [sys.executable, str(entry), "--flow-file", str(flow_path),
-             "--task", task, "--foreground", "--path", str(self.folder)],
+             "--task", task, "--foreground", "--path", str(self.folder)]
+            + list(extra),
             env=self.env, capture_output=True, text=True, cwd=str(self.folder),
             timeout=180)
         return result
+
+    def resume_run(self, run_id):
+        """Continue a finished run from its own state.json."""
+        entry = SCRIPTS / "hsuper.py"
+        return subprocess.run(
+            [sys.executable, str(entry), "--run", run_id, "--resume",
+             "--foreground", "--path", str(self.folder)],
+            env=self.env, capture_output=True, text=True, cwd=str(self.folder),
+            timeout=180)
 
     def run_dirs(self):
         root = self.folder / ".herdr-recipes" / "runs"
@@ -464,6 +474,28 @@ class RecoveryRunTests(unittest.TestCase):
         state = self.state_of(run_dir)
         self.assertEqual(state["steps"]["dev"]["status"], "blocked")
         self.assertEqual(state["steps"]["review"]["status"], "done")
+        self.assertEqual(state["steps"]["commit"]["status"], "skipped")
+
+    def test_a_resume_of_a_blocked_run_still_reports_the_block(self):
+        # A blocked branch waits for a human, so the resume keeps its state
+        # and the run still ends with 21: "waiting on a human" must never
+        # look like a finished run (exit 0).
+        first = self.run_flow(["blocked", "marker"])
+        self.assertEqual(first.returncode, 21, first.stdout + first.stderr)
+        run_id = self.state_of(self.run_dirs()[0])["run_id"]
+        second = self.resume_run(run_id)
+        self.assertEqual(second.returncode, 21, second.stdout + second.stderr)
+        state = self.state_of(self.run_dirs()[0])
+        self.assertEqual(state["steps"]["dev"]["status"], "blocked")
+
+    def test_a_budget_that_truncates_the_run_reports_22(self):
+        # The budget cut the run short, so steps were never dispatched: that
+        # is 22, not the 23 of a plain partial success.
+        result = self.run_flow(["marker"], extra=["--budget-ms", "1"])
+        self.assertEqual(result.returncode, 22, result.stdout + result.stderr)
+        state = self.state_of(self.run_dirs()[0])
+        self.assertEqual(state["steps"]["dev"]["status"], "done")
+        self.assertEqual(state["steps"]["review"]["status"], "skipped")
         self.assertEqual(state["steps"]["commit"]["status"], "skipped")
 
     # --- evidence ---------------------------------------------------------

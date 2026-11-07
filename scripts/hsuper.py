@@ -1297,6 +1297,10 @@ class Supervisor:
         self.step_results = {}  # step_id -> terminal status, set by threads
         self.started_at = time.time()
         self.budget_exhausted = False
+        # budget_truncated is the narrower fact: the deadline cut the run
+        # short, so at least one step was never dispatched.  The budget
+        # alone does not fail a run whose steps all finished.
+        self.budget_truncated = False
         self.budget_ms = options.budget_ms or 0
         # 同时存活的 worker 上限：CLI 覆盖 flow，0 = 不限。1 = 严格串行
         # （也是测试确定性需要的路径）。
@@ -2006,17 +2010,24 @@ class Supervisor:
                 role=settings["role"], kind=settings["kind"],
                 model=settings["model"])
 
-        if resume:
-            order = self.resume_order(order)
-            self.log(None, "resume: 只重跑 %s" % ", ".join(order))
-        else:
-            for step_id in order:
-                self.state.update_step(step_id, status="pending")
-
         failed = []
         blocked = []
         done = []
         skipped = []
+
+        if resume:
+            # A blocked step keeps its state: a human has to act before it
+            # can run again.  It is still reported, so the run ends with 21
+            # instead of pretending the flow finished.
+            waiting = [s for s in order if self.state.status(s) == "blocked"]
+            order = self.resume_order(order)
+            self.log(None, "resume: 只重跑 %s" % ", ".join(order))
+            if waiting:
+                blocked.extend(waiting)
+                self.log(None, "resume: 保持 blocked 的步骤 %s" % ", ".join(waiting))
+        else:
+            for step_id in order:
+                self.state.update_step(step_id, status="pending")
 
         remaining = list(order)
         running = {}  # step_id -> Thread
@@ -2057,19 +2068,9 @@ class Supervisor:
                     self.state.update_step(step_id, status="skipped",
                                            reason="全局超时预算耗尽")
                     skipped.append(step_id)
+                    self.budget_truncated = True
                     remaining.remove(step_id)
                     self.log(step_id, "跳过（全局超时预算耗尽）")
-                    continue
-
-                if resume and self.state.status(step_id) == "done":
-                    self.log(step_id, "已 done，跳过")
-                    done.append(step_id)
-                    remaining.remove(step_id)
-                    continue
-                if resume and self.state.status(step_id) == "blocked":
-                    self.log(step_id, "blocked，保持原状")
-                    blocked.append(step_id)
-                    remaining.remove(step_id)
                     continue
 
                 # Dependencies must all be done before this step dispatches.
@@ -2096,7 +2097,7 @@ class Supervisor:
                 # next pass marks them skipped.
                 time.sleep(0.2)
 
-        return self.exit_code(failed, blocked, done, skipped)
+        return self.exit_code(failed, blocked, skipped)
 
     def _run_step_thread(self, step_id):
         """Thread body: run one step to a terminal state."""
@@ -2112,13 +2113,18 @@ class Supervisor:
     def resume_order(self, order):
         """Steps that ``--resume`` should re-run.
 
-        A step is re-run when it is pending, running or failed, and when the
-        steps it depends on are either already done or are being re-run in
-        this same pass.  The selection is therefore closed under the
-        dependency relation: a dependency always comes first in the
-        topological order, so it is dispatched (and finished) before its
-        dependent.  Done steps are skipped and not dispatched again; blocked
-        steps keep their state.
+        The re-run set is every step that is not finished: ``pending``,
+        ``running``, ``failed`` and ``skipped``.  A skipped step never ran,
+        so it still owes the run its work -- excluding it would leave the
+        flow permanently unfinished while the exit code claimed success.
+
+        The selection is closed under the dependency relation: a step is
+        selected only when the steps it depends on are either already done
+        or are being re-run in this same pass.  A dependency always comes
+        first in the topological order, so it is dispatched (and finished)
+        before its dependent.  Done steps are skipped and not dispatched
+        again; blocked steps keep their state and are reported as blocked
+        by the caller (the run then ends with 21).
         """
         selected = []
         for step_id in order:
@@ -2143,23 +2149,24 @@ class Supervisor:
                 blockers.append(other)
         return blockers
 
-    def exit_code(self, failed, blocked, done, skipped):
+    def exit_code(self, failed, blocked, skipped):
         """The run's exit code.
 
-        The table follows the acceptance criteria in the proposal: a branch
-        that exhausted its recovery ladder is exit 20 even when other
-        branches finished, because that is the actionable signal.  Exit 21 is
-        a branch waiting for a human, exit 22 is the global budget running
-        out, and exit 23 is a partial success without a hard failure.
+        The precedence is the one the docs publish (the proposal's §8.1,
+        flows/_schema.md and scripts/README.md carry the same table): a
+        failed branch (20) is the actionable signal and wins even when other
+        branches finished; a branch waiting for a human (21) needs the
+        operator; the global budget truncating the run (22) needs more time;
+        a partial success (23) is anything else that did not finish.
         """
         if failed:
             return EXIT_BRANCH_FAILED
         if blocked:
             return EXIT_BRANCH_BLOCKED
-        if self.budget_exhausted and not done:
-            # The budget stops further dispatch; it does not retroactively
-            # fail steps that finished.  A run where everything completed
-            # before the budget ran out is a success.
+        if self.budget_truncated:
+            # The budget stopped further dispatch, so the run is truncated:
+            # neither a success nor a plain partial success.  Steps that
+            # finished before the budget ran out keep their result.
             return EXIT_BUDGET
         if skipped:
             return EXIT_PARTIAL

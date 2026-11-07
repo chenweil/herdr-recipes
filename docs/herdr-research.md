@@ -196,14 +196,18 @@ herdr-recipes 保持 **Recipe Launcher**，并允许与外部 workflow 工具组
 - Recipe 是布局、agent 派位和可选初始 prompt 的可复用描述；创建布局和提交 dispatch
   由 Recipe Launcher 负责。
 - Recipe Launcher 不负责等待 agent 工作完成、依赖调度、重试、workflow 恢复或结果收集。
+  **例外**：受监督派发（`hsuper`，ADR-0004，0.10.0）在一次存活的 Supervised Run 内对
+  失败分支执行有界恢复（2 次原会话恢复 + 1 次重建）——重试只存在于这次 run 之内。
 - **Recipe Ready** 表示布局创建成功、配置的 agents 已启动且初始 prompts 已提交；不表示
   agents 已完成任务。
 - Workflow 能力优先复用 herdr-workflows 等现有工具。当前只提供文档组合示例，不增加
   运行时依赖；未来出现记录在案的新需求时可继续开发。
 - 暂不把项目迁移成 Herdr plugin；继续作为个人配置仓库维护。
 
-完整的 YAML DAG、worktree scheduler、retry/resume/collect/cleanup 不进入近期实现。
+完整的 YAML DAG、worktree scheduler、通用 retry/resume/collect/cleanup 不进入近期实现。
 这些能力与现有生态高度重叠，也会把当前 launcher 扩张成独立调度器。
+其中 `hsuper` 的**有界**恢复阶梯（2 次恢复 + 1 次重建）与 `--resume` 续跑是
+ADR-0004 明确收窄后的例外：它们只在一次存活的 Supervised Run 内生效，不是通用运行时。
 
 ## 5. 已确认的实现方向
 

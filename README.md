@@ -319,10 +319,17 @@ Flag reference: `-l/--layout`, `-k/--kind`, `-p/--prompt`, `-N/--pane-name`, `-n
 
 ## Compose with an external Workflow
 
-This repository is a Recipe Launcher: it prepares a layout and performs Dispatch. It does not
-wait for agent work, retry steps, collect results, or clean up workspaces. Those responsibilities
-can be delegated to the optional [herdr-workflows](https://github.com/aorumbayev/herdr-workflows)
-plugin; installing that plugin is not required by this repository.
+This repository is a Recipe Launcher: it prepares a layout and performs Dispatch. On its own it
+does not wait for agent work, retry steps, collect results, or clean up workspaces. Those
+responsibilities can be delegated to the optional
+[herdr-workflows](https://github.com/aorumbayev/herdr-workflows) plugin; installing that plugin is
+not required by this repository.
+
+The one exception is `hsuper.sh`: a Supervised Run applies a bounded recovery ladder to a
+failing branch (2 session resumes, then 1 rebuild, then the branch is marked failed). That retry
+lives inside the Supervised Run — it never turns the launcher into a background daemon or a
+general-purpose retry runtime. See
+[ADR-0004](docs/adr/0004-supervised-dispatch-boundary.md).
 
 For example, prepare a bare Recipe, then run an external review Workflow:
 

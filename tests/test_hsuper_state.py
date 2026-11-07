@@ -166,6 +166,63 @@ class ResumeSelectionTests(unittest.TestCase):
         supervisor = self.supervisor()
         self.assertIn("dev", supervisor.resume_order(["dev", "review", "commit"]))
 
+    def test_skipped_steps_are_re_run(self):
+        # A skipped step never ran, so it still owes the run its work: if it
+        # were not re-run the flow would stay unfinished forever while the
+        # exit code claimed success.
+        self.state.update_step("dev", status="skipped")
+        supervisor = self.supervisor()
+        self.assertIn("dev", supervisor.resume_order(["dev", "review", "commit"]))
+
+    def test_a_dependent_of_a_skipped_step_is_re_run_too(self):
+        self.state.update_step("dev", status="failed")
+        self.state.update_step("review", status="skipped")
+        supervisor = self.supervisor()
+        selected = supervisor.resume_order(["dev", "review", "commit"])
+        self.assertIn("dev", selected)
+        self.assertIn("review", selected)
+
+
+class ExitCodeTests(unittest.TestCase):
+    """The exit code table.
+
+    One table, published in three places: the proposal's §8.1,
+    flows/_schema.md and scripts/README.md.  These tests pin the mapping
+    the implementation has to honour.
+    """
+
+    def supervisor(self, budget_truncated=False):
+        supervisor = hsuper.Supervisor.__new__(hsuper.Supervisor)
+        supervisor.budget_truncated = budget_truncated
+        return supervisor
+
+    def test_a_failed_branch_is_20(self):
+        self.assertEqual(self.supervisor().exit_code(["dev"], [], []), 20)
+
+    def test_a_blocked_branch_is_21(self):
+        self.assertEqual(self.supervisor().exit_code([], ["dev"], []), 21)
+
+    def test_a_truncated_budget_is_22(self):
+        self.assertEqual(self.supervisor(True).exit_code([], [], ["dev"]), 22)
+
+    def test_skipped_without_a_failure_is_23(self):
+        self.assertEqual(self.supervisor().exit_code([], [], ["dev"]), 23)
+
+    def test_nothing_left_over_is_0(self):
+        self.assertEqual(self.supervisor().exit_code([], [], []), 0)
+
+    def test_a_failure_wins_over_everything_else(self):
+        # ADR-0004: a failed branch is never packaged as a partial success.
+        self.assertEqual(self.supervisor(True).exit_code(["dev"], ["review"],
+                                                         ["commit"]), 20)
+
+    def test_a_block_wins_over_the_budget(self):
+        self.assertEqual(self.supervisor(True).exit_code([], ["dev"], ["review"]),
+                         21)
+
+    def test_the_budget_wins_over_a_partial_success(self):
+        self.assertEqual(self.supervisor(True).exit_code([], [], ["dev"]), 22)
+
 
 class ResumeCommandTests(unittest.TestCase):
     """The --resume command line."""

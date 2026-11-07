@@ -40,7 +40,7 @@ conditionals, or automatic publishing.
 
 ## Measured facts this decision relies on
 
-Herdr 0.9.5, measured on a disposable server (see `docs/herdr-research.md` §16):
+Herdr 0.9.5, measured on a disposable server (see `docs/herdr-research.md` §11):
 
 - An agent that exits leaves its pane back at the shell prompt with the original
   `shell_pid`, so the same pane can host a replacement.
